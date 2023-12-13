@@ -1,0 +1,9 @@
+# Bash files
+sync_juwels.sh
+
+# HDF5 files
+*.hdf5
+
+# Old programs
+pseudoscalar/perambulator_contractions_mesons_old.ipynb
+pseudoscalar/pseudoscalar.ipynb
