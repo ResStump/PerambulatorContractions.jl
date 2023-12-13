@@ -1,0 +1,22 @@
+["Run name"]
+name    = "B450r000"
+
+["Directories and Files"]
+dat_dir     = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/B450r00/perambulator_B450r000"
+tsrc_list   = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/B450r00/perambulator_B450r000/tsrc_list"
+result_dir = "./"
+
+["Configurations"]
+first   = 1
+last    = 1
+step    = 1
+
+["Sources"]
+N_src           = 8
+src_separation  = 8
+
+["Perambulator"]
+label_base      = "tsrc"
+
+["Mode doublets"]
+i_p     = 14        # [0, 0, 0]

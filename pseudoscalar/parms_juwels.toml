@@ -1,0 +1,22 @@
+["Run name"]
+name    = "B450r000"
+
+["Directories and Files"]
+dat_dir     = "/p/scratch/hintspec/green/dibaryon/B450r000/dat/"
+tsrc_list   = "/p/project/hintspec/green/dibaryon_prod/B450r000/perambulator_run1/tsrc_list"
+result_dir = "./"
+
+["Configurations"]
+first   = 1
+last    = 1612
+step    = 1
+
+["Sources"]
+N_src           = 8
+src_separation  = 8
+
+["Perambulator"]
+label_base      = "tsrc"
+
+["Mode doublets"]
+i_p     = 14        # [0, 0, 0]
