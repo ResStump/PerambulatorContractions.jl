@@ -27,6 +27,9 @@ push!(ARGS, "-i", "pseudoscalar/parms_B450r000.toml")
 ###################
 
 struct Parms
+    # String containt in parameter toml file passed to program
+    parms_toml_string::String
+
     # Paths
     dat_dir
     result_dir
@@ -65,8 +68,8 @@ parms_toml = Dict()
 """
     read_parameters()
 
-Read the parameters stored in the file that is passed to the program with the
-flag -i. Use these parameters to set the global parameters.
+Read the parameters stored in parameter file passed to the program with the
+flag -i. Set dictonary 'parms_toml' and Parms instance 'parms'.
 """
 function read_parameters()
     # Search for parameter file in arguments passed to program
@@ -82,7 +85,6 @@ function read_parameters()
     # Read parameters from parameter file and store them in the Dict 'parms'
     parms_string = read(parms_file, String)
     merge!(parms_toml, TOML.parse(parms_string))
-    parms_toml["parms_toml_string"] = parms_string
 
     # Read source times
     tsrc_list = DelimitedFiles.readdlm(
@@ -124,10 +126,8 @@ function read_parameters()
                      for i_src in 0:N_src-1]...)
     tsrc_arr = mod.(tsrc_arr, Nₜ) # avoid values >= Nₜ
 
-    global parms = Parms(dat_dir, result_dir, cnfg_indices, tsrc_arr, Nₜ,
-                         N_modes, N_cnfg, N_src)
-
-    return
+    global parms =  Parms(parms_string, dat_dir, result_dir, cnfg_indices,
+                          tsrc_arr, Nₜ, N_modes, N_cnfg, N_src)
 end
 
 """
@@ -179,7 +179,7 @@ end
     write_correlator(correlator_file, correlator)
 
 Write 'correlator' and its dimension labels to the HDF5 file 'correlator_file'.
-Additionally, also write the parameter file <parms file> as a string to it.
+Additionally, also write the parameter file 'parms_toml_string' to it.
 """
 function write_correlator(correlator_file, correlator)
     hdf5_file = HDF5.h5open(string(correlator_file), "w")
@@ -190,9 +190,72 @@ function write_correlator(correlator_file, correlator)
         ["t", "source", "cnfg"]
 
     # Write parameter file
-    hdf5_file["parms.toml"] = parms_toml["parms_toml_string"]
+    hdf5_file["parms.toml"] = parms.parms_toml_string
     
     close(hdf5_file)
+
+    return
+end
+
+
+# Contraction Functions
+#######################
+
+"""
+    pseudoscalar_contraction!(Cₜ, t₀, iₚ, perambulator_file, mode_doublets_file)
+
+Read the perambulator and mode_doublets in 'perambulator_file' and
+'mode_doublets_file', and contract them to get the pseudoscalar correlator and
+store it in 'Cₜ' The index 'iₚ' sets the momentum.
+The resulting correlator is shifted such that the source time 't₀' is the first
+entry.
+"""
+function pseudoscalar_contraction!(Cₜ::Vector{Complex}, t₀, iₚ,
+                                   perambulator_file, mode_doublets_file)
+    # read perambulator and mode doublets
+    τ_αkβlt = read_perambulator(perambulator_file)
+    Φ_kltiₚ = read_mode_doublets(mode_doublets_file)[1]
+
+    Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, 1, iₚ]
+
+    for t in 1:parms.Nₜ
+        Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, t, iₚ]
+        τ_αkβl_t = @view τ_αkβlt[:, :, :, :, t]
+        
+        TO.@tensoropt begin
+            C = Φ_kl_tiₚ[k, k'] * τ_αkβl_t[α, k', β, l'] *
+                conj(Φ_kl_t₀iₚ[l, l']) * conj(τ_αkβl_t[α, k, β, l])
+        end
+
+        # Correct that t₀≠0
+        Cₜ[mod1(t-t₀, parms.Nₜ)] = C
+    end
+
+    return
+end
+
+"""
+    pseudoscalar_contraction_p0!(perambulator_file, t₀)
+
+Read the perambulator in 'perambulator_file' and contract it to get the
+pseudoscalar correlator for momentum p=0. Then store it in 'Cₜ'.
+The resulting correlator is shifted such that the source time 't₀' is the first
+entry.
+"""
+function pseudoscalar_contraction_p0!(Cₜ, t₀, perambulator_file)
+    # read perambulator
+    τ_αkβlt = read_perambulator(perambulator_file)
+
+    for t in 1:parms.Nₜ
+        τ_αkβl_t = @view τ_αkβlt[:, :, :, :, t]
+
+        TO.@tensoropt begin
+            C = τ_αkβl_t[α, k, β, l] * conj(τ_αkβl_t[α, k, β, l])
+        end
+
+        # Correct that t₀≠0
+        Cₜ[mod1(t-t₀, parms.Nₜ)] = C
+    end
 
     return
 end
@@ -219,36 +282,21 @@ mode_doublets_file(n_cnfg) = parms.dat_dir/
 
 # Momentum index
 iₚ = parms_toml["Mode doublets"]["i_p"]
-Cₜ = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
+correlator = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
 
 for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
     println("Configuration $n_cnfg")
+
     for (i_src, t₀) in enumerate(parms.tsrc_arr[i_cnfg, :])
         println("Source: $i_src of $(parms.N_src)")
 
-        # read perambulator and mode doublets of configuration i_config 
-        τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
-        # Φ_kltiₚ, p_arr = read_mode_doublets(mode_doublets_file(n_cnfg))
-
-        # Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, 1, iₚ]
-
-        for t in 1:parms.Nₜ
-            # Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, t, iₚ]
-            τ_αkβl_t = @view τ_αkβlt[:, :, :, :, t]
-            
-            # TO.@tensoropt begin
-            #     C = Φ_kl_tiₚ[k, k'] * τ_αkβl_t[α, k', β, l'] *
-            #         conj(Φ_kl_t₀iₚ[l, l']) * conj(τ_αkβl_t[α, k, β, l])
-            # end
-
-            TO.@tensoropt begin
-                C = τ_αkβl_t[α, k, β, l] * conj(τ_αkβl_t[α, k, β, l])
-            end
-
-            # Correct that t₀≠0
-            Cₜ[mod1(t-t₀, parms.Nₜ), i_src, n_cnfg] = C
-        end
+        Cₜ = @view correlator[:, i_src, n_cnfg]
+        #= pseudoscalar_contraction!(Cₜ, t₀, iₚ,
+                                 perambulator_file(n_cnfg, t₀),
+                                 mode_doublets_file(n_cnfg)) =#
+        pseudoscalar_contraction_p0!(Cₜ, t₀, perambulator_file(n_cnfg, t₀))
     end
+    
     println("Finished configuration $n_cnfg\n")
 end
 
@@ -260,8 +308,7 @@ correlator_file =
     "$(parms_toml["Run name"]["name"])_" *
     "$(parms.N_modes)modes_pseudoscalar.hdf5"
 
-
-write_correlator(parms.result_dir/correlator_file, Cₜ)
+write_correlator(parms.result_dir/correlator_file, correlator)
 
 
 # %%
