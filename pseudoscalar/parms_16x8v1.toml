@@ -4,7 +4,7 @@ name    = "16x8v1"
 ["Directories and Files"]
 dat_dir     = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/wit/results_DStill/16x8/dat"
 tsrc_list   = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/wit/results_DStill/16x8/dat/tsrc_list"
-result_dir = "./"
+result_dir = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/PerambulatorContractions/pseudoscalar"
 
 ["Configurations"]
 first   = 1

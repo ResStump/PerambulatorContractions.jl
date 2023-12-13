@@ -4,7 +4,7 @@ name    = "B450r000"
 ["Directories and Files"]
 dat_dir     = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/B450r00/perambulator_B450r000"
 tsrc_list   = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/B450r00/perambulator_B450r000/tsrc_list"
-result_dir = "./"
+result_dir = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/PerambulatorContractions/pseudoscalar"
 
 ["Configurations"]
 first   = 1
