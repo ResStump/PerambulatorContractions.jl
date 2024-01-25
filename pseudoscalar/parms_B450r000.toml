@@ -19,4 +19,4 @@ src_separation  = 8
 label_base      = "tsrc"
 
 ["Mode doublets"]
-i_p     = 14        # [0, 0, 0]
+i_p     = 13        # [0, 0, 0]

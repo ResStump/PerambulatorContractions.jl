@@ -2,9 +2,13 @@
 name    = "16x8v1"
 
 ["Directories and Files"]
-dat_dir     = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/wit/results_DStill/16x8/dat"
+dat_dir     = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/wit-position_space_sampling/results_DStill/16x8_Nsep2/dat"
 tsrc_list   = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/wit/results_DStill/16x8/dat/tsrc_list"
 result_dir = "/home/stumpa/Seafile/Dokumente/HU_Berlin,DESY/Programs/wit_-_MainzLattice/PerambulatorContractions/pseudoscalar"
+
+["Geometry"]
+N_t     = 16
+N_k     = [8, 8, 8]
 
 ["Configurations"]
 first   = 1
@@ -18,5 +22,5 @@ src_separation  = 1
 ["Perambulator"]
 label_base      = "light_tsrc"
 
-["Mode doublets"]
-i_p     = 14        # [0, 0, 0]
+["Momentum"]
+p       = [0, 0, 0]
