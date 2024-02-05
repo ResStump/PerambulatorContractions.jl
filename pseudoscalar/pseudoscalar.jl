@@ -17,10 +17,10 @@ import TOML
 import HDF5
 import DelimitedFiles
 import FilePathsBase: /, Path
-import BenchmarkTools.@btime
+# import BenchmarkTools.@btime
 
 # Add infile manually to arguments
-pushfirst!(ARGS, "-i", "pseudoscalar/parms_16x8v1.toml")
+# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
 
 
 # %%###############
@@ -37,7 +37,9 @@ struct Parms
     parms_toml_string::String
 
     # Paths
-    dat_dir
+    perambulator_dir
+    mode_doublets_dir
+    sparse_modes_dir
     result_dir
 
     # Configuration numbers and source times
@@ -102,7 +104,9 @@ function read_parameters()
     )
     
     # Set paths
-    dat_dir = Path(parms_toml["Directories and Files"]["dat_dir"])
+    perambulator_dir = Path(parms_toml["Directories and Files"]["perambulator_dir"])
+    mode_doublets_dir = Path(parms_toml["Directories and Files"]["mode_doublets_dir"])
+    sparse_modes_dir = Path(parms_toml["Directories and Files"]["sparse_modes_dir"])
     result_dir = Path(parms_toml["Directories and Files"]["result_dir"])
 
     # Lattice size
@@ -135,7 +139,7 @@ function read_parameters()
         "perambulator_$(parms_toml["Perambulator"]["label_base"])" * "$(tsrc_list[1, 2])_" *
         "$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
     
-    file = HDF5.h5open(string(dat_dir/perambulator_file), "r")
+    file = HDF5.h5open(string(perambulator_dir/perambulator_file), "r")
     N_modes = size(file["perambulator"])[4]
     close(file)
 
@@ -143,8 +147,9 @@ function read_parameters()
     p = parms_toml["Momentum"]["p"]
 
     # Store all parameters in 'parms'
-    global parms = Parms(parms_toml_string, dat_dir, result_dir, cnfg_indices, tsrc_arr,
-                         Nₜ, Nₖ, N_modes, N_cnfg, N_src, p)
+    global parms = Parms(parms_toml_string, perambulator_dir, mode_doublets_dir,
+        sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr, Nₜ, Nₖ,
+        N_modes, N_cnfg, N_src, p)
 end
 
 @doc raw"""
@@ -312,8 +317,10 @@ pseudoscalar correlator and store it in 'Cₜ'. The source time 't₀' is used t
 shift 'Cₜ' such that the source time is at the origin. The index 'iₚ' sets the momentum
 that is used from the mode doublet.
 """
-function pseudoscalar_contraction!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
-                                   Φ_kltiₚ::AbstractArray,  t₀::Integer, iₚ::Integer)
+function pseudoscalar_contraction!(
+    Cₜ::AbstractVector, τ_αkβlt::AbstractArray, Φ_kltiₚ::AbstractArray,
+    t₀::Integer, iₚ::Integer
+)
     # Index for source time 't₀'
     i_t₀ = mod1(t₀+1, parms.Nₜ)
 
@@ -346,8 +353,9 @@ Contract the perambulator 'τ\_αkβlt' to get the pseudoscalar correlator and
 store it in 'Cₜ'. The source time 't₀' is used to circularly shift 'Cₜ' such that the
 source time is at the origin.
 """
-function pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, 
-                                      t₀::Integer)
+function pseudoscalar_contraction_p0!(
+    Cₜ::AbstractVector, τ_αkβlt::AbstractArray, t₀::Integer
+)
     # Loop over all sink time indice
     for iₜ in 1:parms.Nₜ
         # Perambulator at sink (index 'iₜ')
@@ -376,9 +384,10 @@ time 't₀' is used to circularly shift 'Cₜ' such that the source time is at t
 The array 'p' is the integer momentum that is used for the momentum projection of the
 correlator.
 """
-function pseudoscalar_sparse_contraction!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
-                                          sparse_modes_arrays::NTuple{4, AbstractArray},
-                                          t₀::Integer, p::Vector)
+function pseudoscalar_sparse_contraction!(
+    Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
+    sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::Vector
+)
     x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
     # Index for source time 't₀'
@@ -439,12 +448,12 @@ read_parameters()
 ######################
 
 # File paths
-perambulator_file(n_cnfg, i_src) = parms.dat_dir/"perambulator_" *
+perambulator_file(n_cnfg, i_src) = parms.perambulator_dir/"perambulator_" *
                                    "$(parms_toml["Perambulator"]["label_base"])$(i_src)_" *
                                    "$(parms_toml["Run name"]["name"])n$(n_cnfg)"
-mode_doublets_file(n_cnfg) = parms.dat_dir/
+mode_doublets_file(n_cnfg) = parms.mode_doublets_dir/
                              "mode_doublets_$(parms_toml["Run name"]["name"])n$(n_cnfg)"
-sparse_modes_file(n_cnfg) = parms.dat_dir/
+sparse_modes_file(n_cnfg) = parms.sparse_modes_dir/
                             "sparse_modes_$(parms_toml["Run name"]["name"])n$(n_cnfg)"
 
 
@@ -534,9 +543,9 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
 
         τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
 
-        Cₜ = @view correlator[:, i_src, n_cnfg]
-        Cₜ_2 = @view correlator2[:, i_src, n_cnfg]
-        Cₜ_3 = @view correlator3[:, i_src, n_cnfg]
+        Cₜ = @view correlator[:, i_src, i_cnfg]
+        Cₜ_2 = @view correlator2[:, i_src, i_cnfg]
+        Cₜ_3 = @view correlator3[:, i_src, i_cnfg]
         pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
         pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
         pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, parms.p)
@@ -549,16 +558,20 @@ end
 # Store correlator
 ##################
 
-correlator_file = 
-    "$(parms_toml["Run name"]["name"])_" *
-    "$(parms.N_modes)modes_pseudoscalar.hdf5"
+run_name = parms_toml["Run name"]["name"]
+
+correlator_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar.hdf5"
+correlator2_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar_p0.hdf5"
+correlator3_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar_sparse.hdf5"
 
 write_correlator(parms.result_dir/correlator_file, correlator)
+write_correlator(parms.result_dir/correlator2_file, correlator2)
+write_correlator(parms.result_dir/correlator3_file, correlator3)
 
 
 # %%
 
-import Plots as Plt
+#= import Plots as Plt
 import Statistics as Stats
 using LaTeXStrings
 
@@ -581,12 +594,12 @@ Plt.scatter!(1:parms.Nₜ, corr3, label="Position space sampling")
 for i in 1:parms.N_cnfg
     #= Plt.plot!(legend=false)
     Plt.scatter!(1:parms.Nₜ, corr_[:, 1, i][corr_[:, 1, i].>0.0], label="Using mode doublets")
-    Plt.scatter!(1:parms.Nₜ, corr2_[:, 1, i][corr2_[:, 1, i].>0.0], label="Using full eigenvectors") =#
+    #Plt.scatter!(1:parms.Nₜ, corr2_[:, 1, i][corr2_[:, 1, i].>0.0], label="Using full eigenvectors") =#
 
 end
 display(plot)
 
-# Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf")
+# Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf") =#
 
 
 # %%
