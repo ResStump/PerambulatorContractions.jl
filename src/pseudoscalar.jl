@@ -162,7 +162,8 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
                 pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
             end
             @time "    pseudoscalar_sparse_contraction!" begin
-                pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, parms.p)
+                pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀,
+                                                 parms.p)
             end
             println()
         end
@@ -182,7 +183,7 @@ correlator3_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar_sparse.h
 
 @time "Write correlators" begin
     write_correlator(parms.result_dir/correlator_file, correlator)
-    write_correlator(parms.result_dir/correlator2_file, correlator2)
+    write_correlator(parms.result_dir/correlator2_file, correlator2, zeros(Int, 3))
     write_correlator(parms.result_dir/correlator3_file, correlator3)
 end
 
