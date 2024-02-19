@@ -17,10 +17,11 @@ import TOML
 import HDF5
 import DelimitedFiles
 import FilePathsBase: /, Path
-# import BenchmarkTools.@btime
+import BenchmarkTools.@btime
+import Startup
 
 # Add infile manually to arguments
-# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
+pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
 
 
 # %%###############
@@ -535,20 +536,35 @@ correlator3 = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
 for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
     println("Configuration $n_cnfg")
 
-    sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
-    Φ_kltiₚ = read_mode_doublets(mode_doublets_file(n_cnfg))
+    @time "  Read sparse modes " begin
+        sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
+    end
+    @time "  Read mode doublets" begin
+        Φ_kltiₚ = read_mode_doublets(mode_doublets_file(n_cnfg))
+    end
+    println()
 
     for (i_src, t₀) in enumerate(parms.tsrc_arr[i_cnfg, :])
-        println("Source: $i_src of $(parms.N_src)")
+        println("  Source: $i_src of $(parms.N_src)")
 
-        τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
+        @time "    Read perambulator" begin
+            τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
+        end
+        println()
 
         Cₜ = @view correlator[:, i_src, i_cnfg]
         Cₜ_2 = @view correlator2[:, i_src, i_cnfg]
         Cₜ_3 = @view correlator3[:, i_src, i_cnfg]
-        pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-        pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
-        pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, parms.p)
+        @time "    pseudoscalar_contraction!       " begin
+            pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
+        end
+        @time "    pseudoscalar_contraction_p0!    " begin
+            pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
+        end
+        @time "    pseudoscalar_sparse_contraction!" begin
+            pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, parms.p)
+        end
+        println()
     end
     
     println("Finished configuration $n_cnfg\n")
@@ -564,14 +580,26 @@ correlator_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar.hdf5"
 correlator2_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar_p0.hdf5"
 correlator3_file = "$(run_name)_" * "$(parms.N_modes)modes_pseudoscalar_sparse.hdf5"
 
-write_correlator(parms.result_dir/correlator_file, correlator)
-write_correlator(parms.result_dir/correlator2_file, correlator2)
-write_correlator(parms.result_dir/correlator3_file, correlator3)
+@time "Write correlators" begin
+    write_correlator(parms.result_dir/correlator_file, correlator)
+    write_correlator(parms.result_dir/correlator2_file, correlator2)
+    write_correlator(parms.result_dir/correlator3_file, correlator3)
+end
 
 
 # %%
 
-#= import Plots as Plt
+correlator = HDF5.h5read("run_pseudoscalar_juwels_tmp0/program_files/results/B450r000_32modes_pseudoscalar.hdf5", "Correlator")
+correlator2 = HDF5.h5read("run_pseudoscalar_juwels_tmp0/program_files/results/B450r000_32modes_pseudoscalar_p0.hdf5", "Correlator")
+correlator3 = HDF5.h5read("run_pseudoscalar_juwels_tmp0/program_files/results/B450r000_32modes_pseudoscalar_sparse.hdf5", "Correlator")
+
+Nₜ, _, _ = size(correlator)
+
+
+
+# %%
+
+import Plots as Plt
 import Statistics as Stats
 using LaTeXStrings
 
@@ -588,18 +616,18 @@ corr2_ = Stats.mean(real(correlator2), dims=(2))
 corr2_[corr2_.<=0] .= NaN
 
 plot = Plt.plot(xlabel=L"t/a", ylabel=L"C(t)", yscale=:log)
-Plt.scatter!(1:parms.Nₜ, corr, label="Using mode doublets")
-# Plt.scatter!(1:parms.Nₜ, corr2, label="For zero momentum")
-Plt.scatter!(1:parms.Nₜ, corr3, label="Position space sampling")
+Plt.scatter!(1:Nₜ, corr, label="Using mode doublets")
+#Plt.scatter!(1:Nₜ, corr2, label="For zero momentum")
+Plt.scatter!(1:Nₜ, corr3, label="Position space sampling")
 for i in 1:parms.N_cnfg
     #= Plt.plot!(legend=false)
-    Plt.scatter!(1:parms.Nₜ, corr_[:, 1, i][corr_[:, 1, i].>0.0], label="Using mode doublets")
-    #Plt.scatter!(1:parms.Nₜ, corr2_[:, 1, i][corr2_[:, 1, i].>0.0], label="Using full eigenvectors") =#
+    Plt.scatter!(1:Nₜ, corr_[:, 1, i][corr_[:, 1, i].>0.0], label="Using mode doublets")
+    #Plt.scatter!(1:Nₜ, corr2_[:, 1, i][corr2_[:, 1, i].>0.0], label="Using full eigenvectors") =#
 
 end
 display(plot)
 
-# Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf") =#
+# Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf")
 
 
 # %%
