@@ -24,7 +24,7 @@ include("IO.jl")
 include("contractions.jl")
 
 # Add infile manually to arguments
-# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
+# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_B450r000.toml")
 
 
 # %%###############
@@ -135,39 +135,39 @@ correlator3 = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
 
 for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
     println("Configuration $n_cnfg")
+    @time "Finished configuration $n_cnfg" begin
+        @time "  Read sparse modes " begin
+            sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
+        end
+        @time "  Read mode doublets" begin
+            Φ_kltiₚ = read_mode_doublets(mode_doublets_file(n_cnfg))
+        end
+        println()
 
-    @time "  Read sparse modes " begin
-        sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
-    end
-    @time "  Read mode doublets" begin
-        Φ_kltiₚ = read_mode_doublets(mode_doublets_file(n_cnfg))
+        for (i_src, t₀) in enumerate(parms.tsrc_arr[i_cnfg, :])
+            println("  Source: $i_src of $(parms.N_src)")
+
+            @time "    Read perambulator" begin
+                τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
+            end
+            println()
+
+            Cₜ = @view correlator[:, i_src, i_cnfg]
+            Cₜ_2 = @view correlator2[:, i_src, i_cnfg]
+            Cₜ_3 = @view correlator3[:, i_src, i_cnfg]
+            @time "    pseudoscalar_contraction!       " begin
+                pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
+            end
+            @time "    pseudoscalar_contraction_p0!    " begin
+                pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
+            end
+            @time "    pseudoscalar_sparse_contraction!" begin
+                pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, parms.p)
+            end
+            println()
+        end
     end
     println()
-
-    for (i_src, t₀) in enumerate(parms.tsrc_arr[i_cnfg, :])
-        println("  Source: $i_src of $(parms.N_src)")
-
-        @time "    Read perambulator" begin
-            τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
-        end
-        println()
-
-        Cₜ = @view correlator[:, i_src, i_cnfg]
-        Cₜ_2 = @view correlator2[:, i_src, i_cnfg]
-        Cₜ_3 = @view correlator3[:, i_src, i_cnfg]
-        @time "    pseudoscalar_contraction!       " begin
-            pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-        end
-        @time "    pseudoscalar_contraction_p0!    " begin
-            pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
-        end
-        @time "    pseudoscalar_sparse_contraction!" begin
-            pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, parms.p)
-        end
-        println()
-    end
-    
-    println("Finished configuration $n_cnfg\n")
 end
 
 
