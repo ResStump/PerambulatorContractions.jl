@@ -247,12 +247,18 @@ end
 Write 'correlator' and its dimension labels to the HDF5 file 'correlator\_file'.
 Additionally, also write the parameter file 'parms\_toml\_string' to it.
 """
-function write_correlator(correlator_file, correlator)
+function write_correlator(correlator_file, correlator, p=nothing)
     hdf5_file = HDF5.h5open(string(correlator_file), "w")
 
     # Write correlator with dimension labels
     hdf5_file["Correlator"] = correlator
     HDF5.attributes(hdf5_file["Correlator"])["DIMENSION_LABELS"] = ["t", "source", "cnfg"]
+
+    # Write momentum
+    if p === nothing
+        p = parms.p
+    end
+    hdf5_file["momentum"] = p
 
     # Write parameter file
     hdf5_file["parms.toml"] = parms.parms_toml_string
