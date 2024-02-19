@@ -89,7 +89,6 @@ function pseudoscalar_sparse_contraction!(
     
     # Number of points on spares lattice
     _, N_points = size(x_sink_μiₓ)
-    println("number of points: ", N_points)
 
     # Laplace modes at source time 't₀'
     v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
