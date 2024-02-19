@@ -167,6 +167,7 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
             end
             println()
         end
+    GC.gc()
     end
     println()
 end
