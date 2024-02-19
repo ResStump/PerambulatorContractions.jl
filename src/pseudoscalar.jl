@@ -21,7 +21,7 @@ import BenchmarkTools.@btime
 import Startup
 
 # Add infile manually to arguments
-pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
+# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
 
 
 # %%###############
@@ -599,7 +599,7 @@ Nₜ, _, _ = size(correlator)
 
 # %%
 
-import Plots as Plt
+#= import Plots as Plt
 import Statistics as Stats
 using LaTeXStrings
 
@@ -627,7 +627,7 @@ for i in 1:parms.N_cnfg
 end
 display(plot)
 
-# Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf")
+# Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf") =#
 
 
 # %%
