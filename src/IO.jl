@@ -255,7 +255,7 @@ function write_correlator(correlator_file, correlator, p=nothing)
     HDF5.attributes(hdf5_file["Correlator"])["DIMENSION_LABELS"] = ["t", "source", "cnfg"]
 
     # Write momentum
-    if p === nothing
+    if isnothing(p)
         p = parms.p
     end
     hdf5_file["momentum"] = p
