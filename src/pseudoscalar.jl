@@ -21,16 +21,18 @@ import FilePathsBase: /, Path
 import BenchmarkTools.@btime
 import Startup
 
-include("IO.jl")
+include("allocate_arrays.jl")
 include("contractions.jl")
+include("IO.jl")
+include("utils.jl")
 
 # Add infile manually to arguments
 # pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
 
 
-# %%###############
-# Global Parameters
-###################
+# %%#############################
+# Global Parameters and Functions
+#################################
 
 # Instance of Parms
 parms = nothing
@@ -39,15 +41,8 @@ parms = nothing
 parms_toml = Dict()
 
 
-
-# %%#########
-# Computation
-#############
-
 read_parameters()
 
-# Compute Contractions
-######################
 
 # File paths
 perambulator_file(n_cnfg, i_src) = parms.perambulator_dir/"perambulator_" *
@@ -58,61 +53,6 @@ mode_doublets_file(n_cnfg) = parms.mode_doublets_dir/
 sparse_modes_file(n_cnfg) = parms.sparse_modes_dir/
                             "sparse_modes_$(parms_toml["Run name"]["name"])n$(n_cnfg)"
 
-
-# %%
-
-function increase_separation(sparse_modes_arrays, N_sep_new, n_cnfg)
-    if mod(N_sep_new, 2) != 0
-        throw(ArgumentError("'N_sep_new' has to be a multiple of 2."))
-    end
-    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
-
-    # Determine seperation in current sparse modes
-    N_sep = (prod(parms.Nₖ)/size(x_sink_μiₓ)[2])^(1/3)
-    N_sep = round(Int, N_sep)
-
-    # Create array with indices of new sparse modes
-    iₓ_arr = collect(1:size(x_sink_μiₓ)[2])
-    Nₖ_sparse = round(Int, length(iₓ_arr)^(1/3))
-    iₓ_arr = reshape(iₓ_arr, (Nₖ_sparse, Nₖ_sparse, Nₖ_sparse))
-    iₓ_arr = permutedims(iₓ_arr, (3, 2, 1))
-    division = N_sep_new÷N_sep
-    if division == 0
-        throw(ArgumentError("'N_sep_new' has to be bigger than the N_sep in "*
-                            "sparse_modes_arrays."))
-    end
-
-    seed = parms_toml["Increased Separation"]["seed"]
-    seed_cnfg = seed ⊻ n_cnfg
-    rng = Random.MersenneTwister(seed_cnfg)
-    
-    iₓ_sink_new_arr = vec(iₓ_arr[1:division:end, 1:division:end, 1:division:end])
-    iₓ_src_new_arr = Array{Int}(undef, length(iₓ_sink_new_arr), parms.Nₜ)
-    for iₜ in 1:parms.Nₜ
-        offset = rand(rng, 1:division, 3)
-        iₓ_src_new_arr[:, iₜ] = vec(iₓ_arr[offset[1]:division:end,
-                                           offset[2]:division:end,
-                                           offset[3]:division:end])
-    end
-
-    # Create new sparse spaces/modes at sink
-    x_sink_new_μiₓ = x_sink_μiₓ[:, iₓ_sink_new_arr]
-    v_sink_new_ciₓkt = v_sink_ciₓkt[:, iₓ_sink_new_arr, :, :]
-
-    # Create new sparse spaces/modes at sink
-    x_src_new_μiₓt = Array{Int}(undef, size(x_sink_new_μiₓ)..., parms.Nₜ)
-    v_src_new_ciₓkt = Array{ComplexF64}(undef, size(x_sink_new_μiₓ)..., parms.N_modes, parms.Nₜ)
-    for iₜ in 1:parms.Nₜ
-        x_src_new_μiₓt[:, :, iₜ] = x_src_μiₓt[:, iₓ_src_new_arr[:, iₜ], iₜ]
-        v_src_new_ciₓkt[:, :, :, iₜ] = v_src_ciₓkt[:, iₓ_src_new_arr[:, iₜ], :, iₜ]
-    end
-
-    return x_sink_new_μiₓ, x_src_new_μiₓt, v_sink_new_ciₓkt, v_src_new_ciₓkt
-end
-
-
-# %%
-
 # Get momentum index
 p_arr = read_mode_doublet_momenta(mode_doublets_file(parms.cnfg_indices[1]))
 iₚ = findfirst(p -> p == parms.p, eachrow(p_arr))
@@ -120,24 +60,48 @@ if isnothing(iₚ)
     throw(DomainError("the chosen momentum 'p' is not contained in mode doublets."))
 end
 
-# Allocate arrays to store the correlator
+
+# %%#############
+# Allocate Arrays
+#################
+
+# Select valid cnfg number
+n_cnfg = parms.cnfg_indices[1]
+
+# Perambulator and mode doublets array
+τ_αkβlt = allocate_perambulator()
+Φ_kltiₚ = allocate_mode_doublets(mode_doublets_file(n_cnfg))
+
+# Sparse mode arrays
+sparse_modes_arrays = allocate_sparse_modes(sparse_modes_file(n_cnfg))
+if parms_toml["Increased Separation"]["increase_sep"]
+    N_sep_new = parms_toml["Increased Separation"]["N_sep_new"]
+    N_points = prod(parms.Nₖ)÷N_sep_new^3 
+    sparse_modes_arrays_new = allocate_sparse_modes(N_points=N_points)
+end
+
 correlator = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
 correlator2 = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
 correlator3 = Array{ComplexF64}(undef, parms.Nₜ, parms.N_src, parms.N_cnfg)
+
+
+# %%#########
+# Computation
+#############
 
 for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
     println("Configuration $n_cnfg")
     @time "Finished configuration $n_cnfg" begin
         @time "  Read sparse modes " begin
-            sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
+            read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
             if parms_toml["Increased Separation"]["increase_sep"]
                 N_sep_new = parms_toml["Increased Separation"]["N_sep_new"]
-                sparse_modes_arrays = increase_separation(sparse_modes_arrays, N_sep_new,
-                                                          n_cnfg)
+                increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays,
+                                     N_sep_new, n_cnfg)
             end
         end
         @time "  Read mode doublets" begin
-            Φ_kltiₚ = read_mode_doublets(mode_doublets_file(n_cnfg))
+            read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
         end
         println()
 
@@ -145,7 +109,7 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
             println("  Source: $i_src of $(parms.N_src)")
 
             @time "    Read perambulator" begin
-                τ_αkβlt = read_perambulator(perambulator_file(n_cnfg, t₀))
+                read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
             end
             println()
 
@@ -164,7 +128,6 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
             end
             println()
         end
-    GC.gc()
     end
     println()
 end
@@ -225,9 +188,25 @@ Plt.scatter!(1:Nₜ, corr3, label="Position space sampling")
     #Plt.scatter!(1:Nₜ, corr2_[:, 1, i][corr2_[:, 1, i].>0.0], label="Using full eigenvectors")
 
 end =#
-display(plot) =#
+display(plot)
 
 # Plt.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf")
+
+
+# %%
+# Argument of correlaztor
+denom = 16
+
+corr_complex = vec(Stats.mean(correlator, dims=(2, 3)))
+corr3_complex = vec(Stats.mean(correlator3, dims=(2, 3)))
+
+p = Plt.plot(xlabel=L"t/a", ylabel=L"\arg(C(t))", ylims=2π./denom.*[-2.5, 2.5])
+Plt.hline!([2π/denom], label=L"\pm 2\pi/%$denom, \pm 4\pi/%$denom", color=:black)
+Plt.hline!([4π/denom], label=nothing, color=:black)
+Plt.hline!([-2π/denom], label=nothing, color=:black)
+Plt.hline!([-4π/denom], label=nothing, color=:black)
+Plt.scatter!(0:Nₜ, angle.(corr_complex), label="Using mode doublets")
+Plt.scatter!(0:Nₜ, angle.(corr3_complex), label="Position space sampling") =#
 
 
 # %%

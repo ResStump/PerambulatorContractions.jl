@@ -1,6 +1,8 @@
 import TOML
 import HDF5
 
+include("allocate_arrays.jl")
+
 
 @doc raw"""
     Parms
@@ -39,7 +41,7 @@ end
     read_parameters()
 
 Read the parameters stored in the parameter file passed to the program with the flag -i.
-Set dictonary 'parms_toml' and Parms instance 'parms'.
+Set dictonary `parms_toml` and Parms instance `parms`.
 """
 function read_parameters()
     # Search for parameter file in arguments passed to program
@@ -52,7 +54,7 @@ function read_parameters()
 
     parms_file = ARGS[parms_file_index+1]
 
-    # Read parameters from parameter file and store them in the 'parms_toml'
+    # Read parameters from parameter file and store them in the `parms_toml`
     parms_toml_string = read(parms_file, String)
     merge!(parms_toml, TOML.parse(parms_toml_string))
 
@@ -71,7 +73,7 @@ function read_parameters()
     Nₜ = parms_toml["Geometry"]["N_t"]
     Nₖ = parms_toml["Geometry"]["N_k"]
 
-    # Set 'cnfg_indices'
+    # Set `cnfg_indices`
     first_cnfg = parms_toml["Configurations"]["first"]
     step_cnfg = parms_toml["Configurations"]["step"]
     last_cnfg = parms_toml["Configurations"]["last"]
@@ -85,7 +87,7 @@ function read_parameters()
         tsrc_first[i_cnfg] = tsrc_list[idx, 2]
     end
 
-    # Store all source times in 'tsrc_arr'
+    # Store all source times in `tsrc_arr`
     N_src = parms_toml["Sources"]["N_src"]
     src_separation = parms_toml["Sources"]["src_separation"]
     tsrc_arr = hcat([tsrc_first .+ i_src*src_separation
@@ -104,84 +106,75 @@ function read_parameters()
     # Momentum
     p = parms_toml["Momentum"]["p"]
 
-    # Store all parameters in 'parms'
+    # Store all parameters in `parms`
     global parms = Parms(parms_toml_string, perambulator_dir, mode_doublets_dir,
         sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr, Nₜ, Nₖ,
         N_modes, N_cnfg, N_src, p)
 end
 
 @doc raw"""
-    read_perambulator(perambulator_file) -> τ_αkβlt
+    read_perambulator!(perambulator_file, τ_αkβlt)
 
-Read the perambulator from the HDF5 file 'perambulator_file'.
+Read the perambulator from the HDF5 file `perambulator_file` and store it in `τ_αkβlt`.
 
 ### Indices
-The indices of 'τ_αkβlt' are:
+The indices of `τ_αkβlt` are:
 - α: sink spinor
 - k: sink Laplace mode
 - β: source spinor
 - l: source Laplace mode
 - t: sink time
-"""
-function read_perambulator(perambulator_file)
-    # Read perambulator and set noise index to 1 (since noise is 'ones')
-    hdf5_file = HDF5.h5open(string(perambulator_file), "r")
-    τ_αkβlt = read(hdf5_file["perambulator"])[:,:,:,:,:,1]
-    close(hdf5_file)
 
+See also: `read_perambulator`.
+"""
+function read_perambulator!(perambulator_file, τ_αkβlt)
     # Check if shape is correct
     N_color1, N_modes1, N_color2, N_modes2, Nₜ = size(τ_αkβlt)
     if N_color1 != N_color2 != 4
-        throw(DimensionMismatch("dimension of spinor index in perambulator is wrong."))
+        throw(DimensionMismatch("dimensions of spinor axis in perambulator don't match."))
     end
     if N_modes1 != N_modes2 != parms.N_modes
-        throw(DimensionMismatch("wrong number of modes in the perambulator."))
+        throw(DimensionMismatch("number of modes don't match."))
     end
     if Nₜ != parms.Nₜ
-        throw(DimensionMismatch("dimension of time index in perambulator is wrong."))
+        throw(DimensionMismatch("dimensions of time axis don't match."))
     end
+    
+    # Read perambulator and set noise index to 1 (since noise is `ones`)
+    hdf5_file = HDF5.h5open(string(perambulator_file), "r")
+    τ_αkβlt[:] = hdf5_file["perambulator"][:,:,:,:,:,1]
+    close(hdf5_file)
+
+    return 
+end
+
+@doc raw"""
+    read_perambulator(perambulator_file) -> τ_αkβlt
+
+Read the perambulator from the HDF5 file `perambulator_file`.
+
+### Indices
+The indices of `τ_αkβlt` are:
+- α: sink spinor
+- k: sink Laplace mode
+- β: source spinor
+- l: source Laplace mode
+- t: sink time
+
+See also: `read_perambulator!`.
+"""
+function read_perambulator(perambulator_file)
+    # Allocate array and store perambulator in it
+    τ_αkβlt = allocate_perambulator()
+    read_perambulator!(perambulator_file, τ_αkβlt)
 
     return τ_αkβlt
 end
 
 @doc raw"""
-    read_mode_doublets(mode_doublets_file) -> Φ_kltiₚ
-
-Read the mode\_doublets HDF5 file 'mode\_doublets\_file' and return the mode doublets
-'Φ\_kltiₚ'. These mode doublets contain no derivatives.
-
-### Indices
-The indices of 'Φ_kltiₚ' are:
-- k:  conjugated Laplace mode
-- l:  Laplace mode
-- t:  time
-- iₚ: momentum
-"""
-function read_mode_doublets(mode_doublets_file)
-    # Read mode doublets and set the derivative index to 1 (no derivative)
-    hdf5_file = HDF5.h5open(string(mode_doublets_file), "r")
-    Φ_kltiₚ = read(hdf5_file["mode_doublets"])[1,:,:,:,:]
-    close(hdf5_file)
-
-    # Check if shape is correct
-    N_modes1, N_modes2, Nₜ, _ = size(Φ_kltiₚ)
-    if N_modes1 != N_modes2 != parms.N_modes
-        throw(DimensionMismatch("wrong number of modes in the mode doublets."))
-    end
-    if Nₜ != parms.Nₜ
-        throw(DimensionMismatch("dimension of time index in mode doublets is wrong."))
-    end
-
-    # Permute dimensions to match index convention of perambulator
-    Φ_kltiₚ = permutedims(Φ_kltiₚ, (2, 1, 3, 4))
-
-    return Φ_kltiₚ
-end
-
-@doc raw"""
     read_mode_doublet_momenta(mode_doublets_file) -> p_arr
 
-Read the mode\_doublets HDF5 file 'mode\_doublets\_file' and return the momenta 'p\_arr'.
+Read the mode\_doublets HDF5 file `mode_doublets_file` and return the momenta `p_arr`.
 """
 function read_mode_doublet_momenta(mode_doublets_file)
     # Read momenta from and transpose them such that the p_arr[iₚ, :] is the iₚ'th momentum
@@ -193,12 +186,71 @@ function read_mode_doublet_momenta(mode_doublets_file)
 end
 
 @doc raw"""
-    read_sparse_modes(sparse_modes_file)
-        -> x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
+    read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
 
-Read the sparse\_modes HDF5 file 'sparse\_modes\_file' and return the sparse space positions
-at the sink 'x\_sink\_μiₓ' and the source 'x\_src\_μiₓt', and the sparse modes (eigenvectors
-of Laplacian) for the sink 'v\_sink\_μiₓkt' and the source 'v\_src\_μiₓkt'.
+Read the mode\_doublets HDF5 file `mode_doublets_file` and store the mode doublets in
+`Φ_kltiₚ`. These mode doublets contain no derivatives.
+
+### Indices
+The indices of `Φ_kltiₚ` are:
+- k:  conjugated Laplace mode
+- l:  Laplace mode
+- t:  time
+- iₚ: momentum
+
+See also: `read_mode_doublets`.
+"""
+function read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
+    # Check if shape is correct
+    N_modes1, N_modes2, Nₜ, _ = size(Φ_kltiₚ)
+    if N_modes1 != N_modes2 != parms.N_modes
+        throw(DimensionMismatch("number of modes don't match."))
+    end
+    if Nₜ != parms.Nₜ
+        throw(DimensionMismatch("dimensions of time axis don't match."))
+    end
+
+    # Read mode doublets and set the derivative index to 1 (no derivative)
+    hdf5_file = HDF5.h5open(string(mode_doublets_file), "r")
+    Φ_tmp_kltiₚ = read(hdf5_file["mode_doublets"])[1,:,:,:,:]
+    close(hdf5_file)
+
+    # Permute dimensions to match index convention of perambulator
+    permutedims!(Φ_kltiₚ, Φ_tmp_kltiₚ, (2, 1, 3, 4))
+
+    return
+end
+
+@doc raw"""
+    read_mode_doublets(mode_doublets_file) -> Φ_kltiₚ
+
+Read the mode\_doublets HDF5 file `mode_doublets_file` and return the mode doublets
+`Φ_kltiₚ`. These mode doublets contain no derivatives.
+
+### Indices
+The indices of `Φ_kltiₚ` are:
+- k:  conjugated Laplace mode
+- l:  Laplace mode
+- t:  time
+- iₚ: momentum
+
+See also: `read_mode_doublets!`.
+"""
+function read_mode_doublets(mode_doublets_file)
+    # Allocate array and store mode doublets in it 
+    Φ_kltiₚ = allocate_mode_doublets(mode_doublets_file)
+    read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
+
+    return Φ_kltiₚ
+end
+
+@doc raw"""
+    read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
+
+Read the sparse\_modes HDF5 file `sparse_modes_file` and store the sparse space positions
+at the sink `x_sink_μiₓ` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
+of Laplacian) for the sink `v_sink_μiₓkt` and the source `v_src_μiₓkt` in
+`sparse_modes_arrays` = `(x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt)`.
 
 ### Indices
 The last characters in the variable names describe which indices these arrays carry. The
@@ -208,14 +260,12 @@ indices μ, iₓ, t, c and k have the following meaning:
 - t:  time
 - c:  color index
 - k:  Laplace mode
+
+See also: `read_sparse_modes`.
 """
-function read_sparse_modes(sparse_modes_file)
-    hdf5_file = HDF5.h5open(string(sparse_modes_file), "r")
-    x_sink_μiₓ = read(hdf5_file["sparse_space_sink"])
-    x_src_μiₓt = read(hdf5_file["sparse_space_src"])
-    v_sink_ciₓkt = read(hdf5_file["sparse_modes_sink"])
-    v_src_ciₓkt = read(hdf5_file["sparse_modes_src"])
-    close(hdf5_file)
+function read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
+    # Unpack `sparse_modes_arrays`
+    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
     # Check if shapes are correct
     N_dim1, N_points1 = size(x_sink_μiₓ)
@@ -229,23 +279,56 @@ function read_sparse_modes(sparse_modes_file)
         throw(DimensionMismatch("the number of points in the spares spaces don't match."))
     end
     if N_color1 != N_color2 != 4
-        throw(DimensionMismatch("dimension of spinor index in perambulator is wrong."))
+        throw(DimensionMismatch("dimensions of color axis don't match."))
     end
     if N_modes1 != N_modes2 != parms.N_modes
-        throw(DimensionMismatch("wrong number of modes in the perambulator."))
+        throw(DimensionMismatch("number of modes don't match."))
     end
     if Nₜ != parms.Nₜ
-        throw(DimensionMismatch("dimension of time index in perambulator is wrong."))
+        throw(DimensionMismatch("dimensions of time axis don't macht."))
     end
 
-    return x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
+    hdf5_file = HDF5.h5open(string(sparse_modes_file), "r")
+    x_sink_μiₓ[:] = read(hdf5_file["sparse_space_sink"])
+    x_src_μiₓt[:] = read(hdf5_file["sparse_space_src"])
+    v_sink_ciₓkt[:] = read(hdf5_file["sparse_modes_sink"])
+    v_src_ciₓkt[:] = read(hdf5_file["sparse_modes_src"])
+    close(hdf5_file)
+
+    return
+end
+
+@doc raw"""
+    read_sparse_modes(sparse_modes_file)
+        -> x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
+
+Read the sparse\_modes HDF5 file `sparse_modes_file` and return the sparse space positions
+at the sink `x_sink_μiₓ` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
+of Laplacian) for the sink `v_sink_μiₓkt` and the source `v_src_μiₓkt`.
+
+### Indices
+The last characters in the variable names describe which indices these arrays carry. The
+indices μ, iₓ, t, c and k have the following meaning:
+- μ:  spacial direction
+- iₓ: lattice position
+- t:  time
+- c:  color index
+- k:  Laplace mode
+
+See also: `read_sparse_modes!`.
+"""
+function read_sparse_modes(sparse_modes_file)
+    sparse_modes_arrays = allocate_sparse_modes(sparse_modes_file)
+    read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
+
+    return sparse_modes_arrays
 end
 
 @doc raw"""
     write_correlator(correlator_file, correlator)
 
-Write 'correlator' and its dimension labels to the HDF5 file 'correlator\_file'.
-Additionally, also write the parameter file 'parms\_toml\_string' to it.
+Write `correlator` and its dimension labels to the HDF5 file `correlator_file`.
+Additionally, also write the parameter file `parms_toml_string` to it.
 """
 function write_correlator(correlator_file, correlator, p=nothing)
     hdf5_file = HDF5.h5open(string(correlator_file), "w")
