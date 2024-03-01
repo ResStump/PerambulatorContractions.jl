@@ -56,7 +56,7 @@ end
     end
 
     # Check if both mode doublets are the same
-    @test Φ_kltiₚ ≈ Φ2_kltiₚ;
+    @test Φ_kltiₚ ≈ Φ2_kltiₚ
 end
 
 @testset "Compare pseudoscalar correlator from mode doublets and from full modes" begin
