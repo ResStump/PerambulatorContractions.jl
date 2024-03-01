@@ -8,7 +8,7 @@ PT.@setup_workload begin
     # Set parameters
     parms_toml_string = ""
     perambulator_dir, mode_doublets_dir, sparse_modes_dir, result_dir = "", "", "", "" 
-    cnfg_indices, tsrc_arr = zeros(1), zeros(1, 1)
+    cnfg_indices, tsrc_arr = zeros(Int, 1), zeros(Int, 1, 1)
     Nₜ, Nₖ, N_modes = 16, [8, 8, 8], 10
     N_cnfg, N_src = 1, 1
     p = [1, 0, 0]
