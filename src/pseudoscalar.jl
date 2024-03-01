@@ -89,7 +89,7 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
         @time "  Read sparse modes " begin
             read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
             if parms_toml["Increased Separation"]["increase_sep"]
-                N_sep_new = parms_toml["Increased Separation"]["N_sep_new"]
+                local N_sep_new = parms_toml["Increased Separation"]["N_sep_new"]
                 increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays,
                                      N_sep_new, n_cnfg)
             end
@@ -117,8 +117,13 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
                 pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
             end
             @time "    pseudoscalar_sparse_contraction!" begin
-                pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀,
-                                                 parms.p)
+                if parms_toml["Increased Separation"]["increase_sep"]
+                    pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays_new,
+                                                     t₀, parms.p)
+                else
+                    pseudoscalar_sparse_contraction!(Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀,
+                                                     parms.p)
+                end
             end
             println()
         end
@@ -189,10 +194,19 @@ display(plot)
 
 # %%
 # Argument of correlaztor
-denom = 16
+denom = 64
 
-corr_complex = vec(Stats.mean(correlator, dims=(2, 3)))
-corr3_complex = vec(Stats.mean(correlator3, dims=(2, 3)))
+cnfgs = 1:2
+src = 1:8
+
+#= sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
+x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+
+offests = x_src_μiₓt[:, 1, :] .- x_sink_μiₓ[:, 1]
+display(offests) =#
+
+corr_complex = vec(Stats.mean(correlator[:, src, cnfgs], dims=(2, 3)))
+corr3_complex = vec(Stats.mean(correlator3[:, src, cnfgs], dims=(2, 3)))
 
 p = Plt.plot(xlabel=L"t/a", ylabel=L"\arg(C(t))", ylims=2π./denom.*[-2.5, 2.5])
 Plt.hline!([2π/denom], label=L"\pm 2\pi/%$denom, \pm 4\pi/%$denom", color=:black)
