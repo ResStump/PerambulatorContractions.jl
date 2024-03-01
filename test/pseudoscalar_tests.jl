@@ -72,7 +72,6 @@ end
 
     # Loop over all momenta
     for (iₚ, p) in enumerate(eachrow(p_arr))
-        p = Vector(p) # Make sure p is a Vector
         pseudoscalar_contraction!(Cₜ_mode_doublets, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
         pseudoscalar_sparse_contraction!(Cₜ_full_modes, τ_αkβlt, sparse_modes_arrays, t₀, p)
 
