@@ -1,5 +1,7 @@
 import TOML
 import HDF5
+import DelimitedFiles
+import FilePathsBase: /, Path
 
 include("allocate_arrays.jl")
 
@@ -23,7 +25,7 @@ struct Parms
     cnfg_indices::Vector{Int}
     tsrc_arr::Array{Int, 2}
 
-    # Lattice size in time and space and number of modes
+    # Lattice size in time and space, and number of modes
     Nₜ::Int
     Nₖ::Vector{Int} # spatial components k = 1, 2, 3
     N_modes::Int
@@ -40,8 +42,8 @@ end
 @doc raw"""
     read_parameters()
 
-Read the parameters stored in the parameter file passed to the program with the flag -i.
-Set dictonary `parms_toml` and Parms instance `parms`.
+Read the parameters stored in the parameter file passed to the program with the flag -i and
+return the dictonary `parms_toml` and the Parms instance `parms`.
 """
 function read_parameters()
     # Search for parameter file in arguments passed to program
@@ -56,7 +58,7 @@ function read_parameters()
 
     # Read parameters from parameter file and store them in the `parms_toml`
     parms_toml_string = read(parms_file, String)
-    merge!(parms_toml, TOML.parse(parms_toml_string))
+    parms_toml = TOML.parse(parms_toml_string)
 
     # Read source times
     tsrc_list = DelimitedFiles.readdlm(
@@ -106,10 +108,12 @@ function read_parameters()
     # Momentum
     p = parms_toml["Momentum"]["p"]
 
-    # Store all parameters in `parms`
-    global parms = Parms(parms_toml_string, perambulator_dir, mode_doublets_dir,
+    # Store all parameters
+    parms = Parms(parms_toml_string, perambulator_dir, mode_doublets_dir,
         sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr, Nₜ, Nₖ,
         N_modes, N_cnfg, N_src, p)
+    
+    return parms, parms_toml
 end
 
 @doc raw"""

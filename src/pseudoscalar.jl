@@ -34,14 +34,8 @@ include("utils.jl")
 # Global Parameters and Functions
 #################################
 
-# Instance of Parms
-parms = nothing
-
-# Dict with parameters from toml
-parms_toml = Dict()
-
-
-read_parameters()
+# Set global parameters
+parms, parms_toml = read_parameters()
 
 
 # File paths
@@ -68,7 +62,7 @@ end
 # Select valid cnfg number
 n_cnfg = parms.cnfg_indices[1]
 
-# Perambulator and mode doublets array
+# Perambulator and mode doublets arrays
 τ_αkβlt = allocate_perambulator()
 Φ_kltiₚ = allocate_mode_doublets(mode_doublets_file(n_cnfg))
 
