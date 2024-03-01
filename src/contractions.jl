@@ -80,7 +80,7 @@ correlator.
 """
 function pseudoscalar_sparse_contraction!(
     Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
-    sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::Vector
+    sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::AbstractVector
 )
     x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
