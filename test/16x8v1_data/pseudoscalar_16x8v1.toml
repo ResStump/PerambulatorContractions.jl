@@ -14,11 +14,11 @@ N_k     = [8, 8, 8]
 
 ["Configurations"]
 first   = 1
-last    = 10
+last    = 1
 step    = 1
 
 ["Sources"]
-N_src           = 2
+N_src           = 1
 src_separation  = 8
 
 ["Perambulator"]

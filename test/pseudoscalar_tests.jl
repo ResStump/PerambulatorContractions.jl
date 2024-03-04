@@ -1,7 +1,9 @@
-import TensorOperations as TO
+# Add infile manually to arguments
+pushfirst!(ARGS, "-i", "test/16x8v1_data/pseudoscalar_16x8v1.toml")
 
-include("../src/allocate_arrays.jl")
-include("../src/contractions.jl")
+# Read parameters from infile
+parms, parms_toml = read_parameters()
+
 
 # Paths to files
 perambulator_file = parms.perambulator_dir/"perambulator_light_tsrc2_16x8v1n1"
