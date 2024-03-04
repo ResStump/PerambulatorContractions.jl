@@ -85,28 +85,26 @@ function pseudoscalar_sparse_contraction!(
     x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
     # Index for source time 't₀'
-    i_t₀ = mod1(t₀+1, parms.Nₜ)
+    i_t₀ = t₀+1
     
     # Number of points on spares lattice
     _, N_points = size(x_sink_μiₓ)
 
-    # Laplace modes at source time 't₀'
+    # Source position and Laplace modes at source time 't₀'
+    x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
     v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+
+    # Compute exp(±ipx) and reshape it to match shape of Laplace modes
+    exp_mipx_sink_iₓ = exp.(-2π*im * (x_sink_μiₓ./parms.Nₖ)'*p)
+    exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
+    exp_ipx_src_iₓ = exp.(2π*im * (x_src_μiₓ_t₀./parms.Nₖ)'*p)
+    exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
     
     # Loop over all sink time indice
     for iₜ in 1:parms.Nₜ
         # Perambulator and Laplace modes at sink time t (index 'iₜ')
         τ_αkβl_t = @view τ_αkβlt[:, :, :, :, iₜ]
         v_sink_ciₓk_t = @view v_sink_ciₓkt[:, :, :, iₜ]
-
-        # Source position for sink time t
-        x_src_μiₓ_t = @view x_src_μiₓt[:, :, iₜ]
-
-        # Compute exp(±ipx) and reshape it to match shape of Laplace modes
-        exp_mipx_sink_iₓ = exp.(-2π*im * (x_sink_μiₓ./parms.Nₖ)'*p)
-        exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
-        exp_ipx_src_iₓ = exp.(2π*im * (x_src_μiₓ_t./parms.Nₖ)'*p)
-        exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
 
         # Tensor contraction
         TO.@tensoropt begin
