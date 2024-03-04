@@ -21,10 +21,10 @@ import FilePathsBase: /, Path
 import BenchmarkTools.@btime
 import Startup
 
-include("allocate_arrays.jl")
-include("contractions.jl")
 include("IO.jl")
+include("allocate_arrays.jl")
 include("utils.jl")
+include("contractions.jl")
 
 # Add infile manually to arguments
 # pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
@@ -91,7 +91,7 @@ for (i_cnfg, n_cnfg) in enumerate(parms.cnfg_indices)
             if parms_toml["Increased Separation"]["increase_sep"]
                 local N_sep_new = parms_toml["Increased Separation"]["N_sep_new"]
                 increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays,
-                                     N_sep_new, n_cnfg)
+                                     N_sep_new)
             end
         end
         @time "  Read mode doublets" begin
@@ -194,10 +194,10 @@ display(plot)
 
 # %%
 # Argument of correlaztor
-denom = 64
+#= denom = 16
 
-cnfgs = 1:2
-src = 1:8
+cnfgs = 1:10
+src = 1:2
 
 #= sparse_modes_arrays = read_sparse_modes(sparse_modes_file(n_cnfg))
 x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
