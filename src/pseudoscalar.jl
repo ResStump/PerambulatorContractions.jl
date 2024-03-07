@@ -29,7 +29,7 @@ include("mpi_utils.jl")
 include("contractions.jl")
 
 # Add infile manually to arguments
-pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
+# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
 
 # Initialize MPI
 MPI.Init()
