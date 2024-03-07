@@ -30,4 +30,3 @@ p       = [1, 0, 0]
 ["Increased Separation"]
 increase_sep    = false
 N_sep_new       = 2
-seed            = 8425
