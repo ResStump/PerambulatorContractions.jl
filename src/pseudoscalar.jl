@@ -191,9 +191,9 @@ function main()
     end
 
     @time "Remove tmp correlators" begin
-        rm(parms.result_dir/correlator_file_tmp)
-        rm(parms.result_dir/correlator2_file_tmp)
-        rm(parms.result_dir/correlator3_file_tmp)
+        rm(parms.result_dir/correlator_file_tmp, force=true)
+        rm(parms.result_dir/correlator2_file_tmp, force=true)
+        rm(parms.result_dir/correlator3_file_tmp, force=true)
     end
 
 end
