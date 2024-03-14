@@ -1,36 +1,30 @@
-import Test:@test, @testset
-
-include("../src/IO.jl")
-include("../src/allocate_arrays.jl")
-
-
 # Add infile manually to arguments
-pushfirst!(ARGS, "-i", "test/16x8v1_parameter_files/pseudoscalar_16x8v1.toml")
+pushfirst!(ARGS, "-i", "16x8v1_parameter_files/pseudoscalar_16x8v1.toml")
 
 # Read parameters from infile
-parms, parms_toml = read_parameters()
+PC.read_parameters()
 
 # Paths to files
-perambulator_file = parms.perambulator_dir/"perambulator_light_tsrc2_16x8v1n1"
-mode_doublets_file = parms.mode_doublets_dir/"mode_doublets_16x8v1n1"
-sparse_modes_file = parms.sparse_modes_dir/"sparse_modes_Nsep2_16x8v1n1"
+perambulator_file = PC.parms.perambulator_dir/"perambulator_light_tsrc2_16x8v1n1"
+mode_doublets_file = PC.parms.mode_doublets_dir/"mode_doublets_16x8v1n1"
+sparse_modes_file = PC.parms.sparse_modes_dir/"sparse_modes_Nsep2_16x8v1n1"
 
 
 @testset "Read files" begin
     # Allocate arrays
-    τ_αkβlt = allocate_perambulator()
-    Φ_kltiₚ = allocate_mode_doublets(mode_doublets_file)
-    sparse_modes_arrays = allocate_sparse_modes(sparse_modes_file)
+    τ_αkβlt = PC.allocate_perambulator()
+    Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file)
+    sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file)
 
     # Read files using '!' Functions
-    read_perambulator!(perambulator_file, τ_αkβlt)
-    read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
-    read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
+    PC.read_perambulator!(perambulator_file, τ_αkβlt)
+    PC.read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
+    PC.read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
 
     # Read files using 'return' functions
-    τ2_αkβlt = read_perambulator(perambulator_file)
-    Φ2_kltiₚ = read_mode_doublets(mode_doublets_file)
-    sparse_modes_arrays2 = read_sparse_modes(sparse_modes_file)
+    τ2_αkβlt = PC.read_perambulator(perambulator_file)
+    Φ2_kltiₚ = PC.read_mode_doublets(mode_doublets_file)
+    sparse_modes_arrays2 = PC.read_sparse_modes(sparse_modes_file)
 
     # Compare arrays
     @test τ_αkβlt == τ2_αkβlt

@@ -1,11 +1,3 @@
-import TOML
-import HDF5
-import DelimitedFiles
-import FilePathsBase: /, Path
-
-include("allocate_arrays.jl")
-
-
 @doc raw"""
     Parms
 
@@ -38,6 +30,8 @@ struct Parms
     p::Vector{Int}
 end
 
+parms = nothing
+parms_toml = nothing
 
 @doc raw"""
     read_parameters()
@@ -58,7 +52,7 @@ function read_parameters()
 
     # Read parameters from parameter file and store them in the `parms_toml`
     parms_toml_string = read(parms_file, String)
-    parms_toml = TOML.parse(parms_toml_string)
+    global parms_toml = TOML.parse(parms_toml_string)
 
     # Read source times
     tsrc_list = DelimitedFiles.readdlm(
@@ -109,11 +103,11 @@ function read_parameters()
     p = parms_toml["Momentum"]["p"]
 
     # Store all parameters
-    parms = Parms(parms_toml_string, perambulator_dir, mode_doublets_dir,
-        sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr, Nₜ, Nₖ,
-        N_modes, N_cnfg, N_src, p)
+    global parms = Parms(parms_toml_string, perambulator_dir, mode_doublets_dir,
+                         sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr, Nₜ, Nₖ,
+                         N_modes, N_cnfg, N_src, p)
     
-    return parms, parms_toml
+    return
 end
 
 @doc raw"""

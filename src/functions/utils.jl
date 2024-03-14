@@ -1,8 +1,3 @@
-import HDF5
-
-include("allocate_arrays.jl")
-
-
 @doc raw"""
     increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays, N_sep_new, n_cnfg)
 

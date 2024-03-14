@@ -1,5 +1,3 @@
-import MPI
-
 @doc raw"""
     is_my_cnfg(i_cnfg)
 

@@ -1,7 +1,3 @@
-import MKL
-import LinearAlgebra as LA
-import TensorOperations as TO
-
 @doc raw"""
     pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, t₀::Integer)
 

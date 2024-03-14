@@ -2,10 +2,10 @@
 name    = "16x8v1"
 
 ["Directories and Files"]
-perambulator_dir    = "test/16x8v1_data"
-mode_doublets_dir   = "test/16x8v1_data"
-sparse_modes_dir    = "test/16x8v1_data"
-tsrc_list   = "test/16x8v1_data/tsrc_list"
+perambulator_dir    = "16x8v1_data"
+mode_doublets_dir   = "16x8v1_data"
+sparse_modes_dir    = "16x8v1_data"
+tsrc_list   = "16x8v1_data/tsrc_list"
 result_dir = ""
 
 ["Geometry"]
