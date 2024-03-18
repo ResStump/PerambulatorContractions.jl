@@ -348,3 +348,43 @@ function write_correlator(correlator_file, correlator, p=nothing)
 
     return
 end
+
+@doc raw"""
+    write_sparse_modes(sparse_modes_file, sparse_modes_arrays)
+
+Write the sparse modes in `sparse_modes_arrays` to the HDF5 file `sparse_modes_file`.
+
+The `sparse_modes_arrays` must contain the sparse space positions at the sink `x_sink_μiₓ`
+and the source `x_src_μiₓt`, and the sparse modes (eigenvectors of Laplacian) for the sink
+`v_sink_μiₓkt` and the source `v_src_μiₓkt`.
+
+See the documentation of the `read_sparse_modes` function for further information.
+"""
+function write_sparse_modes(sparse_modes_file, sparse_modes_arrays)
+    # Unpack `sparse_modes_arrays`
+    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+
+    hdf5_file = HDF5.h5open(string(sparse_modes_file), "w")
+
+    # Write sparse spaces
+    hdf5_file["sparse_space_sink"] = x_sink_μiₓ
+    hdf5_file["sparse_space_src"] = x_src_μiₓt
+
+    # Write sparse modes
+    hdf5_file["sparse_modes_sink"] = v_sink_ciₓkt
+    hdf5_file["sparse_modes_src"] = v_src_ciₓkt
+
+    # Set attributes
+    HDF5.attrs(hdf5_file["sparse_space_sink"])["DIMENSION_LABELS"] =
+        ["position", "component"]
+    HDF5.attrs(hdf5_file["sparse_space_src"])["DIMENSION_LABELS"] =
+        ["source t", "position", "component"]
+    HDF5.attrs(hdf5_file["sparse_modes_sink"])["DIMENSION_LABELS"] =
+        ["t", "Laplace mode", "position", "color"]
+    HDF5.attrs(hdf5_file["sparse_modes_src"])["DIMENSION_LABELS"] =
+        ["t", "Laplace mode", "position", "color"]
+
+    close(hdf5_file)
+
+    return
+end
