@@ -5,6 +5,7 @@ name    = "16x8v1"
 perambulator_dir    = "perambulator_dir"
 mode_doublets_dir   = "mode_doublets_dir"
 sparse_modes_dir    = "sparse_modes_dir"
+sparse_modes_dir_new = "sparse_modes_dir_new"   # only needed for modes_increase_separation.jl
 tsrc_list   = ""
 result_dir = "results"
 
@@ -26,3 +27,7 @@ label_base      = "light_tsrc"
 
 ["Momentum"]
 p       = [1, 0, 0]
+
+["Increased Separation"]
+increase_sep    = false
+N_sep_new       = 4
