@@ -12,14 +12,10 @@
 
 import MKL
 import LinearAlgebra as LA
-import TensorOperations as TO
 import MPI
-import TOML
 import HDF5
-import DelimitedFiles
 import FilePathsBase: /, Path
 import BenchmarkTools.@btime
-import PerambulatorContractions as PC
 
 # Initialize MPI
 MPI.Init()
@@ -41,8 +37,11 @@ PC.read_parameters()
 
 
 # File paths
-perambulator_file(n_cnfg, i_src) = PC.parms.perambulator_dir/"perambulator_" *
-    "$(PC.parms_toml["Perambulator"]["label_base"])$(i_src)_" *
+perambulator_file(n_cnfg, i_src) = PC.parms.perambulator_dir/
+    "$(PC.parms_toml["Perambulator"]["label_light"])$(i_src)_" *
+    "$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
+perambulator_charm_file(n_cnfg, i_src) = PC.parms.perambulator_charm_dir/
+    "$(PC.parms_toml["Perambulator"]["label_charm"])$(i_src)_" *
     "$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
 mode_doublets_file(n_cnfg) = PC.parms.mode_doublets_dir/
     "mode_doublets_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
@@ -50,20 +49,29 @@ sparse_modes_file(n_cnfg) = PC.parms.sparse_modes_dir/
     "sparse_modes_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
 
 
-# Correlator file names
-run_name = PC.parms_toml["Run name"]["name"]
+# Correlator files
+function correlator_file(name, p; tmp=false)
+    run_name = PC.parms_toml["Run name"]["name"]
+    p_str = "p"*join(p, ",")
+
+    file = PC.parms.result_dir/"$(run_name)_$(PC.parms.N_modes)modes_$(name)_"
+    file *= p_str
+    if tmp
+        file *= "_tmp.hdf5"
+    else
+        file *= ".hdf5"
+    end
     
-correlator_file_tmp = 
-    "$(run_name)_$(PC.parms.N_modes)modes_pseudoscalar_tmp$(myrank).hdf5"
-correlator2_file_tmp = 
-    "$(run_name)_$(PC.parms.N_modes)modes_pseudoscalar_p0_tmp$(myrank).hdf5"
-correlator3_file_tmp = 
-    "$(run_name)_$(PC.parms.N_modes)modes_pseudoscalar_sparse_tmp$(myrank).hdf5"
+    return file
+end
 
+correlator1_file_arr = [correlator_file("pseudoscalar", p) for p in PC.parms.p_arr]
+correlator2_file_arr = [correlator_file("pseudoscalar_sparse", p) for p in PC.parms.p_arr]
 
-correlator_file = "$(run_name)_$(PC.parms.N_modes)modes_pseudoscalar.hdf5"
-correlator2_file = "$(run_name)_$(PC.parms.N_modes)modes_pseudoscalar_p0.hdf5"
-correlator3_file = "$(run_name)_$(PC.parms.N_modes)modes_pseudoscalar_sparse.hdf5"
+correlator1_file_tmp_arr = [correlator_file("pseudoscalar", p, tmp=true)
+                            for p in PC.parms.p_arr]
+correlator2_file_tmp_arr = [correlator_file("pseudoscalar_sparse", p, tmp=true)
+                            for p in PC.parms.p_arr]
 
 
 # %%#############
@@ -75,34 +83,28 @@ n_cnfg = PC.parms.cnfg_indices[1]
 
 # Perambulator and mode doublets arrays
 τ_αkβlt = PC.allocate_perambulator()
+τ_charm_αkβlt = PC.allocate_perambulator()
 Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
 
 # Sparse mode arrays
 sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
-if PC.parms_toml["Increased Separation"]["increase_sep"]
-    N_sep_new = PC.parms_toml["Increased Separation"]["N_sep_new"]
-    N_points = prod(PC.parms.Nₖ)÷N_sep_new^3 
-    sparse_modes_arrays_new = PC.allocate_sparse_modes(N_points=N_points)
-end
 
-correlator = Array{ComplexF64}(undef, PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg)
-correlator2 = Array{ComplexF64}(undef, PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg)
-correlator3 = Array{ComplexF64}(undef, PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg)
+# Correlator for each momentum
+correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
+correlators1 = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
+correlators2 = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
 
 
 
 
 function main()
-    # Get momentum index
-    p_arr = PC.read_mode_doublet_momenta(mode_doublets_file(PC.parms.cnfg_indices[1]))
-    iₚ = findfirst(p -> p == PC.parms.p, eachrow(p_arr))
-    if isnothing(iₚ)
-        throw(DomainError("the chosen momentum 'p' is not contained in mode doublets."))
-    end
+    # Get momentum indices from mode doublets
+    iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
 
     # Computation
     #############
 
+    # Loop over all configurations
     for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_indices)
         # Skip the cnfgs this rank doesn't have to compute
         if !PC.is_my_cnfg(i_cnfg)
@@ -113,83 +115,74 @@ function main()
         @time "Finished configuration $n_cnfg" begin
             @time "  Read sparse modes " begin
                 PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
-                if PC.parms_toml["Increased Separation"]["increase_sep"]
-                    local N_sep_new = PC.parms_toml["Increased Separation"]["N_sep_new"]
-                    PC.increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays,
-                                         N_sep_new)
-                end
             end
             @time "  Read mode doublets" begin
                 PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
             end
             println()
 
+            # Loop over all sources
             for (i_src, t₀) in enumerate(PC.parms.tsrc_arr[i_cnfg, :])
                 println("  Source: $i_src of $(PC.parms.N_src)")
 
-                @time "    Read perambulator" begin
-                    PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
-                end
-                println()
+                # Loop over all momenta
+                for (i_p, p) in enumerate(PC.parms.p_arr)
+                    println("    Momentum p = $p")
+                    iₚ = iₚ_arr[i_p]
 
-                Cₜ = @view correlator[:, i_src, i_cnfg]
-                Cₜ_2 = @view correlator2[:, i_src, i_cnfg]
-                Cₜ_3 = @view correlator3[:, i_src, i_cnfg]
-                @time "    pseudoscalar_contraction!       " begin
-                    PC.pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-                end
-                @time "    pseudoscalar_contraction_p0!    " begin
-                    PC.pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, t₀)
-                end
-                @time "    pseudoscalar_sparse_contraction!" begin
-                    if PC.parms_toml["Increased Separation"]["increase_sep"]
+                    @time "      Read perambulators" begin
+                        PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
+                        PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
+                                              τ_charm_αkβlt)
+                    end
+                    println()
+
+                    # Compute correlator entries
+                    Cₜ = @view correlators1[i_p][:, i_src, i_cnfg]
+                    Cₜ_2 = @view correlators2[i_p][:, i_src, i_cnfg]
+                    @time "      pseudoscalar_contraction!       " begin
+                        PC.pseudoscalar_contraction!(Cₜ, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ,
+                                                     t₀, iₚ)
+                    end
+                    @time "      pseudoscalar_sparse_contraction!" begin
                         PC.pseudoscalar_sparse_contraction!(
-                            Cₜ_3, τ_αkβlt, sparse_modes_arrays_new, t₀, PC.parms.p
-                        )
-                    else
-                        PC.pseudoscalar_sparse_contraction!(
-                            Cₜ_3, τ_αkβlt, sparse_modes_arrays, t₀, PC.parms.p
+                            Cₜ_2, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p
                         )
                     end
+                    println()
                 end
                 println()
             end
 
             # Temporary store correlators 
             @time "  Write tmp correlators" begin
-                PC.write_correlator(PC.parms.result_dir/correlator_file_tmp, correlator)
-                PC.write_correlator(PC.parms.result_dir/correlator2_file_tmp, correlator2,
-                                    zeros(Int, 3))
-                PC.write_correlator(PC.parms.result_dir/correlator3_file_tmp, correlator3)
+                PC.write_correlator.(correlator1_file_tmp_arr, correlators1, PC.parms.p_arr)
+                PC.write_correlator.(correlator2_file_tmp_arr, correlators2, PC.parms.p_arr)
             end
             println()
         end
         println("\n")
     end
 
-    # Broadcast correlator to all ranks
+    # Broadcast correlators to all ranks
     @time "Broadcast correlators" begin
-        PC.broadcast_correlators!(correlator)
-        PC.broadcast_correlators!(correlator2)
-        PC.broadcast_correlators!(correlator3)
+        PC.broadcast_correlators!.(correlators1)
+        PC.broadcast_correlators!.(correlators2)
     end
 
-    # Store correlator and remove tmp correlators
-    #############################################
+    # Store correlators and remove tmp correlators
+    ##############################################
 
     if myrank == 0
         @time "Write correlators" begin
-            PC.write_correlator(PC.parms.result_dir/correlator_file, correlator)
-            PC.write_correlator(PC.parms.result_dir/correlator2_file, correlator2,
-                                zeros(Int, 3))
-            PC.write_correlator(PC.parms.result_dir/correlator3_file, correlator3)
+            PC.write_correlator.(correlator1_file_arr, correlators1, PC.parms.p_arr)
+            PC.write_correlator.(correlator2_file_arr, correlators2, PC.parms.p_arr)
         end
     end
 
     @time "Remove tmp correlators" begin
-        rm(PC.parms.result_dir/correlator_file_tmp, force=true)
-        rm(PC.parms.result_dir/correlator2_file_tmp, force=true)
-        rm(PC.parms.result_dir/correlator3_file_tmp, force=true)
+        rm.(correlator1_file_tmp_arr, force=true)
+        rm.(correlator2_file_tmp_arr, force=true)
     end
 
 end
