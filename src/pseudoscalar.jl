@@ -16,6 +16,7 @@ import MPI
 import HDF5
 import FilePathsBase: /, Path
 import BenchmarkTools.@btime
+import PerambulatorContractions as PC
 
 # Initialize MPI
 MPI.Init()
