@@ -58,7 +58,7 @@ function correlator_file(name, p; tmp=false)
     file = PC.parms.result_dir/"$(run_name)_$(PC.parms.N_modes)modes_$(name)_"
     file *= p_str
     if tmp
-        file *= "_tmp.hdf5"
+        file *= "_tmp$(myrank).hdf5"
     else
         file *= ".hdf5"
     end
