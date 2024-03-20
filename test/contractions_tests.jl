@@ -75,7 +75,8 @@ end
     # Loop over all momenta
     for (iₚ, p) in enumerate(eachrow(p_arr))
         PC.pseudoscalar_contraction!(Cₜ_mode_doublets, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-        PC.pseudoscalar_sparse_contraction!(Cₜ_full_modes, τ_αkβlt, sparse_modes_arrays, t₀, p)
+        PC.pseudoscalar_sparse_contraction!(Cₜ_full_modes, τ_αkβlt, sparse_modes_arrays,
+                                            t₀, p)
 
         @test Cₜ_mode_doublets ≈ Cₜ_full_modes
 
@@ -83,4 +84,59 @@ end
             @test Cₜ_mode_doublets ≈ Cₜ_mode_doublets_p0
         end
     end
+end
+
+@testset "Compare pseudoscalar contractions with one and two perambulators" begin
+    Cₜ_1 = Array{ComplexF64}(undef, PC.parms.Nₜ)
+    Cₜ_2 = similar(Cₜ_1)
+
+    # Source time t₀ and momentum index iₚ
+    t₀ = PC.parms.tsrc_arr[1, 1]
+    iₚ = 1
+    p = p_arr[iₚ, :]
+
+    # For zero momentum
+    PC.pseudoscalar_contraction_p0!(Cₜ_1, τ_αkβlt, t₀)
+    PC.pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, τ_αkβlt, t₀)
+    @test Cₜ_1 ≈ Cₜ_2
+
+    # Using mode doublets
+    PC.pseudoscalar_contraction!(Cₜ_1, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
+    PC.pseudoscalar_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
+    @test Cₜ_1 ≈ Cₜ_2
+
+    # Using sparse modes
+    PC.pseudoscalar_sparse_contraction!(Cₜ_1, τ_αkβlt, sparse_modes_arrays, t₀, p)
+    PC.pseudoscalar_sparse_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt,
+                                        sparse_modes_arrays, t₀, p)
+    @test Cₜ_1 ≈ Cₜ_2
+end
+
+@testset "Compare meson_connected and pseudoscalar contractions" begin
+    Cₜ_pseudoscalar = Array{ComplexF64}(undef, PC.parms.Nₜ)
+    Cₜ_meson_connected = similar(Cₜ_pseudoscalar)
+
+    # Source time t₀ and momentum index iₚ
+    t₀ = PC.parms.tsrc_arr[1, 1]
+    iₚ = 1
+    p = p_arr[iₚ, :]
+
+    # For zero momentum
+    PC.pseudoscalar_contraction_p0!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt, t₀)
+    PC.meson_connected_contraction_p0!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt,
+                                       PC.γ[5], -PC.γ[5], t₀)
+    @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
+
+    # Using mode doublets
+    PC.pseudoscalar_contraction!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
+    PC.meson_connected_contraction!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
+                                    PC.γ[5], -PC.γ[5], t₀, iₚ)
+    @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
+
+    # Using sparse modes
+    PC.pseudoscalar_sparse_contraction!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt,
+                                        sparse_modes_arrays, t₀, p)
+    PC.meson_connected_sparse_contraction!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt,
+                                           sparse_modes_arrays, PC.γ[5], -PC.γ[5], t₀, p)
+    @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
 end

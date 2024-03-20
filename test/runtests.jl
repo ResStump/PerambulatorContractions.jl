@@ -9,7 +9,7 @@ import Test:@test, @testset
 # Run serial tests
 include("IO_tests.jl")
 include("utils_tests.jl")
-include("pseudoscalar_tests.jl")
+include("contractions_tests.jl")
 include("variables_tests.jl")
 
 # Run MPI tests

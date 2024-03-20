@@ -1,10 +1,18 @@
+###########################
+# Pseudoscalar Contractions
+###########################
+
 @doc raw"""
     pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, t₀::Integer)
     pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, t₀::Integer)
 
 Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` to get the pseudoscalar correlator
 for zero momentum where `τ₁_αkβlt` is used to propagate in forward and `τ₂_αkβlt` in
-backward direction. If only one perambulator `τ_αkβlt` is given, it is used to propagete in
+backward direction. This gives a vacuum expectation value of the form \
+`<(ψ₂γ₅ψ₁)(x) (ψ₁γ₅ψ₂)(0)>` \
+(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+
+If only one perambulator `τ_αkβlt` is given, it is used to propagete in
 both directions.
 
 The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
@@ -39,7 +47,11 @@ pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, t�
 
 Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the mode doublets `Φ_kltiₚ` to get
 the pseudoscalar correlator where `τ₁_αkβlt` is used to propagate in forward and `τ₂_αkβlt`
-in backward direction. If only one perambulator `τ_αkβlt` is given, it is used to propagete
+in backward direction. This gives a vacuum expectation value of the form \
+`<(ψ₂γ₅ψ₁)(x) (ψ₁γ₅ψ₂)(0)>` \
+(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+
+If only one perambulator `τ_αkβlt` is given, it is used to propagete
 in both directions.
 
 The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
@@ -85,7 +97,12 @@ pseudoscalar_contraction!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
 
 Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the sparse Laplace modes stored in
 `sparse_modes_arrays` to get the pseudoscalar correlator where `τ₁_αkβlt` is used to
-propagate in forward and `τ₂_αkβlt` in backward direction. If only one perambulator
+propagate in forward and `τ₂_αkβlt` in backward direction. This gives a vacuum expectation
+value of the form \
+`<(ψ₂γ₅ψ₁)(x) (ψ₁γ₅ψ₂)(0)>` \
+(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+
+If only one perambulator
 `τ_αkβlt` is given, it is used to propagete in both directions.
 
 The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
@@ -144,3 +161,120 @@ pseudoscalar_sparse_contraction!(
     Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
     sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::AbstractVector
 ) = pseudoscalar_sparse_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p)
+
+
+
+################################
+# Meson Contractions (connected)
+################################
+
+@doc raw"""
+    meson_connected_contraction_p0!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Γ::AbstractMatrix, Γbar::AbstractMatrix, t₀::Integer)
+
+Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` to get the connected meson correlator
+for zero momentum where `τ₁_αkβlt` is used to propagate in forward and `τ₂_αkβlt` in
+backward direction. The matrices `Γ` and `Γbar` are the matrices in the interpolating
+operators. This gives a vacuum expectation value of the form \
+`<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
+(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+
+The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+that the source time is at the origin.
+"""
+function meson_connected_contraction_p0!(
+    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Γ::AbstractMatrix,
+    Γbar::AbstractMatrix, t₀::Integer
+)
+    # Allocate memory for modified perambulators
+    γ₅Γτ₁_αkβlt = similar(τ₁_αkβlt)
+    Γbarγ₅τ₂_αkβlt = similar(τ₂_αkβlt)
+
+    # Include gamma matrices in perambulators (including sign for overall correlator)
+    γ₅Γ = γ[5]*Γ
+    Γbar_γ₅ = -Γbar*γ[5]
+
+    TO.@tensoropt begin
+        γ₅Γτ₁_αkβlt[α, k, β, l, t] = γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β, l, t]
+        Γbarγ₅τ₂_αkβlt[α, k, β, l, t] = Γbar_γ₅[α, α'] * τ₂_αkβlt[α', k, β, l, t]
+    end
+
+    pseudoscalar_contraction_p0!(Cₜ, γ₅Γτ₁_αkβlt, Γbarγ₅τ₂_αkβlt, t₀)
+
+    return
+end
+
+@doc raw"""
+    meson_connected_contraction!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Φ_kltiₚ::AbstractArray,  Γ::AbstractMatrix, Γbar::AbstractMatrix, t₀::Integer, iₚ::Integer)
+
+Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the mode doublets `Φ_kltiₚ` to get
+the connected meson correlator where `τ₁_αkβlt` is used to propagate in forward and
+`τ₂_αkβlt` in backward direction. The matrices `Γ` and `Γbar` are the matrices in the
+interpolating operators. This gives a vacuum expectation value of the form \
+`<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
+(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+
+The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+that the source time is at the origin. The index `iₚ` sets the momentum that is used from
+the mode doublets.
+"""
+function meson_connected_contraction!(
+    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
+    Φ_kltiₚ::AbstractArray,  Γ::AbstractMatrix, Γbar::AbstractMatrix,
+    t₀::Integer, iₚ::Integer
+)
+    # Allocate memory for modified perambulators
+    γ₅Γτ₁_αkβlt = similar(τ₁_αkβlt)
+    Γbarγ₅τ₂_αkβlt = similar(τ₂_αkβlt)
+
+    # Include gamma matrices in perambulators (including sign for overall correlator)
+    γ₅Γ = γ[5]*Γ
+    Γbar_γ₅ = -Γbar*γ[5]
+
+    TO.@tensoropt begin
+        γ₅Γτ₁_αkβlt[α, k, β, l, t] = γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β, l, t]
+        Γbarγ₅τ₂_αkβlt[α, k, β, l, t] = Γbar_γ₅[α, α'] * τ₂_αkβlt[α', k, β, l, t]
+    end
+
+    pseudoscalar_contraction!(Cₜ, γ₅Γτ₁_αkβlt, Γbarγ₅τ₂_αkβlt, Φ_kltiₚ, t₀, iₚ)
+
+    return
+end
+
+@doc raw"""
+    meson_connected_sparse_contraction!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, sparse_modes_arrays::NTuple{4, AbstractArray},  Γ::AbstractMatrix, Γbar::AbstractMatrix, t₀::Integer,  p::AbstractVector)
+
+Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the sparse Laplace modes stored in
+`sparse_modes_arrays` to get the connected meson correlator where `τ₁_αkβlt` is used to
+propagate in forward and `τ₂_αkβlt` in backward direction. The matrices `Γ` and `Γbar` are
+the matrices in the interpolating operators. This gives a vacuum expectation value of the
+form \
+`<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
+(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+
+The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+that the source time is at the origin. The array `p` is the integer momentum that is used
+for the momentum projection of the correlator.
+"""
+function meson_connected_sparse_contraction!(
+    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
+    sparse_modes_arrays::NTuple{4, AbstractArray},  Γ::AbstractMatrix, Γbar::AbstractMatrix,
+    t₀::Integer, p::AbstractVector
+)
+    # Allocate memory for modified perambulators
+    γ₅Γτ₁_αkβlt = similar(τ₁_αkβlt)
+    Γbarγ₅τ₂_αkβlt = similar(τ₂_αkβlt)
+
+    # Include gamma matrices in perambulators (including sign for overall correlator)
+    γ₅Γ = γ[5]*Γ
+    Γbar_γ₅ = -Γbar*γ[5]
+
+    TO.@tensoropt begin
+        γ₅Γτ₁_αkβlt[α, k, β, l, t] = γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β, l, t]
+        Γbarγ₅τ₂_αkβlt[α, k, β, l, t] = Γbar_γ₅[α, α'] * τ₂_αkβlt[α', k, β, l, t]
+    end
+
+    pseudoscalar_sparse_contraction!(Cₜ, γ₅Γτ₁_αkβlt, Γbarγ₅τ₂_αkβlt, sparse_modes_arrays,
+                                     t₀, p)
+
+    return
+end
