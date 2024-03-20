@@ -60,7 +60,7 @@ n_cnfg = PC.parms.cnfg_indices[1]
 # Sparse mode arrays
 sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
-N_sep_new = PC.parms_toml["Increased Separation"]["N_sep_new"]
+N_sep_new = PC.parms_toml["Increase Separation"]["N_sep_new"]
 N_points = prod(PC.parms.Nₖ)÷N_sep_new^3 
 sparse_modes_arrays_new = PC.allocate_sparse_modes(N_points=N_points)
 
