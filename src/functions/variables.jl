@@ -25,4 +25,5 @@ O = [0 0;
 
 γ = [γ₁, γ₂, γ₃, γ₄, γ₅]
 
+# Charge conjugation matrix
 C = im*γ₂*γ₄
