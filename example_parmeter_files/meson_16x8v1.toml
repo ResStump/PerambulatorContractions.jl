@@ -3,6 +3,7 @@ name    = "16x8v1"
 
 ["Directories and Files"]
 perambulator_dir    = "perambulator_dir"
+perambulator_charm_dir    = "perambulator_dir"
 mode_doublets_dir   = "mode_doublets_dir"
 sparse_modes_dir    = "sparse_modes_dir"
 sparse_modes_dir_new = "sparse_modes_dir_new"   # only needed for modes_increase_separation.jl
@@ -26,8 +27,9 @@ src_separation  = 8
 label_light      = "perambulator_light_tsrc"
 label_charm      = "perambulator_charm_tsrc"
 
-["Momentum"]
-p       = [1, 0, 0]
+["Momenta"]
+p       = [[0, 0, 0],
+           [1, 0, 0]]
 
-["Increased Separation"]
+["Increase Separation"]
 N_sep_new       = 4
