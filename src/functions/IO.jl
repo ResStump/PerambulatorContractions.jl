@@ -55,6 +55,11 @@ function read_parameters()
     parms_toml_string = read(parms_file, String)
     global parms_toml = TOML.parse(parms_toml_string)
 
+    # Add information about program to `parms_toml` (as string)
+    parms_toml["Program Information"] =
+        "Julia version = $VERSION\n"*
+        "$(@__MODULE__) version = $(pkgversion(@__MODULE__))\n"
+
     # Read source times
     tsrc_list = DelimitedFiles.readdlm(
         parms_toml["Directories and Files"]["tsrc_list"], ' ', Int
@@ -363,6 +368,9 @@ function write_correlator(correlator_file, correlator, p=nothing)
 
     # Write parameter file
     hdf5_file["parms.toml"] = parms.parms_toml_string
+
+    # Write program information
+    hdf5_file["Program Information"] = parms_toml["Program Information"]
     
     close(hdf5_file)
 
