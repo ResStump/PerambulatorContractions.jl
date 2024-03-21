@@ -75,6 +75,15 @@ correlator2_file_tmp_arr = [correlator_file("Dstar_i2", p, tmp=true)
 correlator3_file_tmp_arr = [correlator_file("Dstar_i3", p, tmp=true)
                             for p in PC.parms.p_arr]
 
+# Use sparse modes?
+if PC.parms_toml["Correlator"]["method"] == "sparse"
+    method = "sparse"
+elseif PC.parms_toml["Correlator"]["method"] == "full"
+    method = "full"
+else
+    throw(ArgumentError("correlator method is not valid! Choose \"full\" or \"sparse\""))
+end
+
 
 # %%#############
 # Allocate Arrays
@@ -83,13 +92,19 @@ correlator3_file_tmp_arr = [correlator_file("Dstar_i3", p, tmp=true)
 # Select valid cnfg number
 n_cnfg = PC.parms.cnfg_indices[1]
 
-# Perambulator and mode doublets arrays
+# Perambulator
 τ_αkβlt = PC.allocate_perambulator()
 τ_charm_αkβlt = PC.allocate_perambulator()
-Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
+
+# mode doublets arrays
+if method == "full"
+    Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
+end
 
 # Sparse mode arrays
-sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
+if method == "sparse"
+    sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
+end
 
 # Correlator for each momentum
 correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
@@ -117,7 +132,7 @@ function compute_contractions!(i_cnfg, i_src, t₀)
         Cₜ_1 = @view correlators1[i_p][:, i_src, i_cnfg]
         Cₜ_2 = @view correlators2[i_p][:, i_src, i_cnfg]
         Cₜ_3 = @view correlators3[i_p][:, i_src, i_cnfg]
-        if PC.parms_toml["Correlator"]["method"] == "full"
+        if method == "full"
             @time "      meson_connected_contraction! (3x)" begin
                 PC.meson_connected_contraction!(
                     Cₜ_1, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ, Γ₁, Γbar₁, t₀, iₚ
@@ -129,7 +144,7 @@ function compute_contractions!(i_cnfg, i_src, t₀)
                     Cₜ_3, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ, Γ₃, Γbar₃, t₀, iₚ
                 )
             end
-        elseif PC.parms_toml["Correlator"]["method"] == "sparse"
+        else
             @time "      meson_connected_sparse_contraction! (3x)" begin
                 PC.meson_connected_sparse_contraction!(
                     Cₜ_1, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ₁, Γbar₁, t₀, p
@@ -141,12 +156,12 @@ function compute_contractions!(i_cnfg, i_src, t₀)
                     Cₜ_3, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ₃, Γbar₃, t₀, p
                 )
             end
-        else
-            throw(ArgumentError("correlator method is not valid! "*
-                                "Choose \"full\" or \"sparse\""))
         end
         println()
     end
+
+    # Run garbage collector
+    GC.gc()
 end
 
 
@@ -163,11 +178,14 @@ function main()
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
-            @time "  Read sparse modes " begin
-                PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
-            end
-            @time "  Read mode doublets" begin
-                PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+            if method == "full"
+                @time "  Read mode doublets" begin
+                    PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+                end
+            else
+                @time "  Read sparse modes " begin
+                    PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+                end
             end
             println()
 
@@ -177,7 +195,8 @@ function main()
 
                 @time "      Read perambulators" begin
                     PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
-                    PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀), τ_charm_αkβlt)
+                    PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
+                                          τ_charm_αkβlt)
                 end
                 println()
 
