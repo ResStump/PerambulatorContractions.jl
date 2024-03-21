@@ -1,7 +1,7 @@
 # %%########################################################################################
 # pseudoscalar.jl
 #
-# Compute the pseudoscalar meson from perambulators and mode doublets
+# Compute pseudoscalar correlators from perambulators, mode doublets and sparse modes
 #
 # Usage:
 #   pseudoscalar.jl -i <parms file>
@@ -95,13 +95,36 @@ correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
 correlators1 = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
 correlators2 = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
 
+# Get momentum indices from mode doublets
+iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
 
+
+
+function compute_contractions!(i_cnfg, i_src, t₀)
+    # Loop over all momenta
+    for (i_p, p) in enumerate(PC.parms.p_arr)
+        println("    Momentum p = $p")
+        iₚ = iₚ_arr[i_p]
+
+
+        # Compute correlator entries
+        Cₜ = @view correlators1[i_p][:, i_src, i_cnfg]
+        Cₜ_2 = @view correlators2[i_p][:, i_src, i_cnfg]
+        @time "      pseudoscalar_contraction!       " begin
+            PC.pseudoscalar_contraction!(Cₜ, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ,
+                                         t₀, iₚ)
+        end
+        @time "      pseudoscalar_sparse_contraction!" begin
+            PC.pseudoscalar_sparse_contraction!(
+                Cₜ_2, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p
+            )
+        end
+        println()
+    end
+end
 
 
 function main()
-    # Get momentum indices from mode doublets
-    iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
-
     # Computation
     #############
 
@@ -126,32 +149,15 @@ function main()
             for (i_src, t₀) in enumerate(PC.parms.tsrc_arr[i_cnfg, :])
                 println("  Source: $i_src of $(PC.parms.N_src)")
 
-                # Loop over all momenta
-                for (i_p, p) in enumerate(PC.parms.p_arr)
-                    println("    Momentum p = $p")
-                    iₚ = iₚ_arr[i_p]
-
-                    @time "      Read perambulators" begin
-                        PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
-                        PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
-                                              τ_charm_αkβlt)
-                    end
-                    println()
-
-                    # Compute correlator entries
-                    Cₜ = @view correlators1[i_p][:, i_src, i_cnfg]
-                    Cₜ_2 = @view correlators2[i_p][:, i_src, i_cnfg]
-                    @time "      pseudoscalar_contraction!       " begin
-                        PC.pseudoscalar_contraction!(Cₜ, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ,
-                                                     t₀, iₚ)
-                    end
-                    @time "      pseudoscalar_sparse_contraction!" begin
-                        PC.pseudoscalar_sparse_contraction!(
-                            Cₜ_2, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p
-                        )
-                    end
-                    println()
+                @time "      Read perambulators" begin
+                    PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
+                    PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
+                                          τ_charm_αkβlt)
                 end
+                println()
+
+                compute_contractions!(i_cnfg, i_src, t₀)
+                
                 println()
             end
 
