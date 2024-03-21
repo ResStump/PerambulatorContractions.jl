@@ -17,11 +17,6 @@ import HDF5
 import FilePathsBase: /, Path
 import BenchmarkTools.@btime
 import PerambulatorContractions as PC
-#= include("PerambulatorContractions.jl")
-PC = PerambulatorContractions =#
-
-# Add infile manually to arguments
-pushfirst!(ARGS, "-i", "run_meson/input/meson_B450r000.toml")
 
 # Initialize MPI
 MPI.Init()
@@ -229,41 +224,6 @@ function main()
 end
 
 main()
-
-
-# %%
-
-i_p = 2
-
-correlator1 = correlators1[i_p]
-correlator2 = correlators2[i_p]
-correlator3 = correlators3[i_p]
-
-
-
-# %%
-
-import Plots
-import Statistics as Stats
-using LaTeXStrings
-
-function plot_correlator!(correlator; kargs...)
-    corr = vec(Stats.mean(real(correlator), dims=(2, 3)))
-    corr[corr.<=0] .= NaN
-
-    Plots.scatter!(0:PC.parms.Nₜ-1, corr; kargs...)
-
-    return
-end
-
-
-plot = Plots.plot(xlabel=L"t/a", ylabel=L"C(t)", yscale=:log10, minorticks=true)
-plot_correlator!(correlator1, label="Correlator 1")
-plot_correlator!(correlator2, label="Correlator 2")
-plot_correlator!(correlator3, label="Correlator 3")
-display(plot)
-
-# Plots.savefig(p, "pseudoscalar_p1,0,0_Nsep1.pdf")
 
 
 # %%
