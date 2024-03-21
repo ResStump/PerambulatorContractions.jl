@@ -31,5 +31,8 @@ label_charm      = "perambulator_charm_tsrc"
 p       = [[0, 0, 0],
            [1, 0, 0]]
 
+["Correlator"]
+method          = "full"  # "full" or "sparse"
+
 ["Increase Separation"]
 N_sep_new       = 4
