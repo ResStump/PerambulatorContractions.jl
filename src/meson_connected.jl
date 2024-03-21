@@ -159,9 +159,6 @@ function compute_contractions!(i_cnfg, i_src, t₀)
         end
         println()
     end
-
-    # Run garbage collector
-    GC.gc()
 end
 
 
