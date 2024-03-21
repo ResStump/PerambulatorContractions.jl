@@ -185,19 +185,25 @@ function meson_connected_contraction_p0!(
     Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Γ::AbstractMatrix,
     Γbar::AbstractMatrix, t₀::Integer
 )
-    # Allocate memory for modified perambulators
-    γ₅Γτ₁Γbarγ₅_αkβlt = similar(τ₁_αkβlt)
-
-    # Include gamma matrices in perambulators (including sign for overall correlator)
+    # Multiply γ₅ to Gammas
     γ₅Γ = γ[5]*Γ
     Γbarγ₅ = -Γbar*γ[5]
 
-    TO.@tensoropt begin
-        γ₅Γτ₁Γbarγ₅_αkβlt[α, k, β, l, t] =
-            γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β', l, t] * Γbarγ₅[β', β]
-    end
+    # Loop over all sink time indice
+    for iₜ in 1:parms.Nₜ
+        # perambulators at sink (index `iₜ`)
+        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :, iₜ]
+        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
 
-    pseudoscalar_contraction_p0!(Cₜ, γ₅Γτ₁Γbarγ₅_αkβlt, τ₂_αkβlt, t₀)
+        # Tensor contraction
+        TO.@tensoropt begin
+            C = γ₅Γ[α, α'] * τ₁_αkβl_t[α', k, β, l] *
+                Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
+        end
+
+        # Circularly shift time such that t₀=0
+        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
+    end
 
     return
 end
@@ -221,19 +227,34 @@ function meson_connected_contraction!(
     Φ_kltiₚ::AbstractArray,  Γ::AbstractMatrix, Γbar::AbstractMatrix,
     t₀::Integer, iₚ::Integer
 )
-    # Allocate memory for modified perambulators
-    γ₅Γτ₁Γbarγ₅_αkβlt = similar(τ₁_αkβlt)
-
-    # Include gamma matrices in perambulators (including sign for overall correlator)
+    # Multiply γ₅ to Gammas
     γ₅Γ = γ[5]*Γ
     Γbarγ₅ = -Γbar*γ[5]
 
-    TO.@tensoropt begin
-        γ₅Γτ₁Γbarγ₅_αkβlt[α, k, β, l, t] =
-            γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β', l, t] * Γbarγ₅[β', β]
-    end
+    # Index for source time `t₀`
+    i_t₀ = t₀+1
 
-    pseudoscalar_contraction!(Cₜ, γ₅Γτ₁Γbarγ₅_αkβlt, τ₂_αkβlt, Φ_kltiₚ, t₀, iₚ)
+    # Mode doublet at source time `t₀`
+    Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
+
+    # Loop over all sink time indice
+    for iₜ in 1:parms.Nₜ
+        # Mode doublet and perambulators at sink time t (index `iₜ`)
+        Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
+        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
+        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
+        
+        # Tensor contraction
+        TO.@tensoropt begin
+            C = Φ_kl_tiₚ[k, k'] *
+                γ₅Γ[α, α'] * τ₁_αkβl_t[α', k', β, l'] *
+                conj(Φ_kl_t₀iₚ[l, l']) * 
+                Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
+        end
+
+        # Circularly shift time such that t₀=0
+        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
+    end
 
     return
 end
@@ -258,20 +279,51 @@ function meson_connected_sparse_contraction!(
     sparse_modes_arrays::NTuple{4, AbstractArray},  Γ::AbstractMatrix, Γbar::AbstractMatrix,
     t₀::Integer, p::AbstractVector
 )
-    # Allocate memory for modified perambulators
-    γ₅Γτ₁Γbarγ₅_αkβlt = similar(τ₁_αkβlt)
-
-    # Include gamma matrices in perambulators (including sign for overall correlator)
+    # Multiply γ₅ to Gammas
     γ₅Γ = γ[5]*Γ
     Γbarγ₅ = -Γbar*γ[5]
 
-    TO.@tensoropt begin
-        γ₅Γτ₁Γbarγ₅_αkβlt[α, k, β, l, t] =
-            γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β', l, t] * Γbarγ₅[β', β]
-    end
+    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
-    pseudoscalar_sparse_contraction!(Cₜ, γ₅Γτ₁Γbarγ₅_αkβlt, τ₂_αkβlt, sparse_modes_arrays,
-                                     t₀, p)
+    # Index for source time `t₀`
+    i_t₀ = t₀+1
+    
+    # Number of points on spares lattice
+    _, N_points = size(x_sink_μiₓ)
+
+    # Source position and Laplace modes at source time `t₀`
+    x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
+    v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+
+    # Compute exp(±ipx) and reshape it to match shape of Laplace modes
+    exp_mipx_sink_iₓ = exp.(-2π*im * (x_sink_μiₓ./parms.Nₖ)'*p)
+    exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
+    exp_ipx_src_iₓ = exp.(2π*im * (x_src_μiₓ_t₀./parms.Nₖ)'*p)
+    exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
+    
+    # Loop over all sink time indice
+    for iₜ in 1:parms.Nₜ
+        # Perambulators and Laplace modes at sink time t (index `iₜ`)
+        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
+        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
+        v_sink_ciₓk_t = @view v_sink_ciₓkt[:, :, :, iₜ]
+
+        # Tensor contraction
+        TO.@tensoropt begin
+            C = conj(v_sink_ciₓk_t[a, iₓ', k]) * 
+                (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ', k'] *
+                γ₅Γ[α, α'] * τ₁_αkβl_t[α', k', β, l'] *
+                conj(v_src_ciₓk_t₀[b, iₓ, l']) *
+                (exp_ipx_src_iₓ .* v_src_ciₓk_t₀)[b, iₓ, l] *
+                Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
+        end
+
+        # Normalization
+        C *= (prod(parms.Nₖ)/N_points)^2
+
+        # Circularly shift time such that t₀=0
+        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
+    end
 
     return
 end
