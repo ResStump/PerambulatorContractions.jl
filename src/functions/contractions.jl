@@ -63,7 +63,7 @@ function pseudoscalar_contraction!(
     Φ_kltiₚ::AbstractArray, t₀::Integer, iₚ::Integer
 )
     # Index for source time `t₀`
-    i_t₀ = mod1(t₀+1, parms.Nₜ)
+    i_t₀ = t₀+1
 
     # Mode doublet at source time `t₀`
     Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
@@ -186,19 +186,18 @@ function meson_connected_contraction_p0!(
     Γbar::AbstractMatrix, t₀::Integer
 )
     # Allocate memory for modified perambulators
-    γ₅Γτ₁_αkβlt = similar(τ₁_αkβlt)
-    Γbarγ₅τ₂_αkβlt = similar(τ₂_αkβlt)
+    γ₅Γτ₁Γbarγ₅_αkβlt = similar(τ₁_αkβlt)
 
     # Include gamma matrices in perambulators (including sign for overall correlator)
     γ₅Γ = γ[5]*Γ
-    Γbar_γ₅ = -Γbar*γ[5]
+    Γbarγ₅ = -Γbar*γ[5]
 
     TO.@tensoropt begin
-        γ₅Γτ₁_αkβlt[α, k, β, l, t] = γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β, l, t]
-        Γbarγ₅τ₂_αkβlt[α, k, β, l, t] = Γbar_γ₅[α, α'] * τ₂_αkβlt[α', k, β, l, t]
+        γ₅Γτ₁Γbarγ₅_αkβlt[α, k, β, l, t] =
+            γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β', l, t] * Γbarγ₅[β', β]
     end
 
-    pseudoscalar_contraction_p0!(Cₜ, γ₅Γτ₁_αkβlt, Γbarγ₅τ₂_αkβlt, t₀)
+    pseudoscalar_contraction_p0!(Cₜ, γ₅Γτ₁Γbarγ₅_αkβlt, τ₂_αkβlt, t₀)
 
     return
 end
@@ -223,19 +222,18 @@ function meson_connected_contraction!(
     t₀::Integer, iₚ::Integer
 )
     # Allocate memory for modified perambulators
-    γ₅Γτ₁_αkβlt = similar(τ₁_αkβlt)
-    Γbarγ₅τ₂_αkβlt = similar(τ₂_αkβlt)
+    γ₅Γτ₁Γbarγ₅_αkβlt = similar(τ₁_αkβlt)
 
     # Include gamma matrices in perambulators (including sign for overall correlator)
     γ₅Γ = γ[5]*Γ
-    Γbar_γ₅ = -Γbar*γ[5]
+    Γbarγ₅ = -Γbar*γ[5]
 
     TO.@tensoropt begin
-        γ₅Γτ₁_αkβlt[α, k, β, l, t] = γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β, l, t]
-        Γbarγ₅τ₂_αkβlt[α, k, β, l, t] = Γbar_γ₅[α, α'] * τ₂_αkβlt[α', k, β, l, t]
+        γ₅Γτ₁Γbarγ₅_αkβlt[α, k, β, l, t] =
+            γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β', l, t] * Γbarγ₅[β', β]
     end
 
-    pseudoscalar_contraction!(Cₜ, γ₅Γτ₁_αkβlt, Γbarγ₅τ₂_αkβlt, Φ_kltiₚ, t₀, iₚ)
+    pseudoscalar_contraction!(Cₜ, γ₅Γτ₁Γbarγ₅_αkβlt, τ₂_αkβlt, Φ_kltiₚ, t₀, iₚ)
 
     return
 end
@@ -261,19 +259,18 @@ function meson_connected_sparse_contraction!(
     t₀::Integer, p::AbstractVector
 )
     # Allocate memory for modified perambulators
-    γ₅Γτ₁_αkβlt = similar(τ₁_αkβlt)
-    Γbarγ₅τ₂_αkβlt = similar(τ₂_αkβlt)
+    γ₅Γτ₁Γbarγ₅_αkβlt = similar(τ₁_αkβlt)
 
     # Include gamma matrices in perambulators (including sign for overall correlator)
     γ₅Γ = γ[5]*Γ
-    Γbar_γ₅ = -Γbar*γ[5]
+    Γbarγ₅ = -Γbar*γ[5]
 
     TO.@tensoropt begin
-        γ₅Γτ₁_αkβlt[α, k, β, l, t] = γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β, l, t]
-        Γbarγ₅τ₂_αkβlt[α, k, β, l, t] = Γbar_γ₅[α, α'] * τ₂_αkβlt[α', k, β, l, t]
+        γ₅Γτ₁Γbarγ₅_αkβlt[α, k, β, l, t] =
+            γ₅Γ[α, α'] * τ₁_αkβlt[α', k, β', l, t] * Γbarγ₅[β', β]
     end
 
-    pseudoscalar_sparse_contraction!(Cₜ, γ₅Γτ₁_αkβlt, Γbarγ₅τ₂_αkβlt, sparse_modes_arrays,
+    pseudoscalar_sparse_contraction!(Cₜ, γ₅Γτ₁Γbarγ₅_αkβlt, τ₂_αkβlt, sparse_modes_arrays,
                                      t₀, p)
 
     return

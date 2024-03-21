@@ -107,9 +107,84 @@ end
 
     # Using sparse modes
     PC.pseudoscalar_sparse_contraction!(Cₜ_1, τ_αkβlt, sparse_modes_arrays, t₀, p)
-    PC.pseudoscalar_sparse_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt,
-                                        sparse_modes_arrays, t₀, p)
+    PC.pseudoscalar_sparse_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p)
     @test Cₜ_1 ≈ Cₜ_2
+end
+
+@testset "Meson_connected contractions" begin
+    Cₜ_1 = Array{ComplexF64}(undef, PC.parms.Nₜ)
+    Cₜ_2 = similar(Cₜ_1)
+
+    # Source time t₀ and momentum index iₚ
+    t₀ = PC.parms.tsrc_arr[1, 1]
+    iₚ = 1
+    p = p_arr[iₚ, :]
+
+    # Matrices in interpolstors
+    Γ_arr = [PC.γ[1], PC.γ[2], PC.γ[3], PC.γ[5]*PC.γ[4], PC.γ[5]]
+
+    for Γ in Γ_arr
+        Γbar = PC.γ[4]*Γ*PC.γ[4]
+
+        # Zero Momentum
+        ###############
+
+        # Direct computation
+        for iₜ in 1:PC.parms.Nₜ
+            # perambulators at sink (index `iₜ`)
+            τ_αkβl_t = @view τ_αkβlt[:, :, :, :, iₜ]
+
+            # Tensor contraction
+            TO.@tensoropt begin
+                C = (PC.γ[5]*Γ)[α, α'] * τ_αkβl_t[α', k, β, l] *
+                    (-Γbar*PC.γ[5])[β, β'] * conj(τ_αkβl_t[α, k, β', l])
+            end
+
+            # Circularly shift time such that t₀=0
+            Cₜ_1[mod1(iₜ-t₀, PC.parms.Nₜ)] = C
+        end
+        
+        PC.meson_connected_contraction_p0!(Cₜ_2, τ_αkβlt, τ_αkβlt, Γ, Γbar, t₀)
+        @test Cₜ_1 ≈ Cₜ_2
+
+
+        # Non-Zero Momentum
+        ###################
+
+        # Index for source time `t₀`
+        i_t₀ = t₀+1
+
+        # Mode doublet at source time `t₀`
+        Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
+
+        # Direct computation
+        for iₜ in 1:PC.parms.Nₜ
+            # Mode doublet and perambulators at sink time t (index `iₜ`)
+            Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
+            τ_αkβl_t = @view τ_αkβlt[:, :, :, :,iₜ]
+            
+            # Tensor contraction
+            TO.@tensoropt begin
+                C = Φ_kl_tiₚ[k, k'] *
+                    (PC.γ[5]*Γ)[α, α'] * τ_αkβl_t[α', k', β, l'] *
+                    conj(Φ_kl_t₀iₚ[l, l']) *
+                    (-Γbar*PC.γ[5])[β, β'] * conj(τ_αkβl_t[α, k, β', l])
+            end
+
+            # Circularly shift time such that t₀=0
+            Cₜ_1[mod1(iₜ-t₀, PC.parms.Nₜ)] = C
+        end
+        
+        PC.meson_connected_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
+                                        Γ, Γbar, t₀, iₚ)
+        @test Cₜ_1 ≈ Cₜ_2
+
+        # Check if meson_connected_sparse_contraction! is also correct
+        PC.meson_connected_sparse_contraction!(
+            Cₜ_2, τ_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ, Γbar, t₀, p
+        )
+        @test Cₜ_1 ≈ Cₜ_2
+    end
 end
 
 @testset "Compare meson_connected and pseudoscalar contractions" begin
@@ -121,22 +196,25 @@ end
     iₚ = 1
     p = p_arr[iₚ, :]
 
+    # Matrices in interpolstors
+    Γ, Γbar = PC.γ[5], -PC.γ[5]
+
     # For zero momentum
     PC.pseudoscalar_contraction_p0!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt, t₀)
     PC.meson_connected_contraction_p0!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt,
-                                       PC.γ[5], -PC.γ[5], t₀)
+                                       Γ, Γbar, t₀)
     @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
 
     # Using mode doublets
     PC.pseudoscalar_contraction!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
     PC.meson_connected_contraction!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
-                                    PC.γ[5], -PC.γ[5], t₀, iₚ)
+                                    Γ, Γbar, t₀, iₚ)
     @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
 
     # Using sparse modes
     PC.pseudoscalar_sparse_contraction!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt,
                                         sparse_modes_arrays, t₀, p)
     PC.meson_connected_sparse_contraction!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt,
-                                           sparse_modes_arrays, PC.γ[5], -PC.γ[5], t₀, p)
+                                           sparse_modes_arrays, Γ, Γbar, t₀, p)
     @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
 end
