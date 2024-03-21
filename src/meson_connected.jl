@@ -190,7 +190,7 @@ function main()
             for (i_src, t₀) in enumerate(PC.parms.tsrc_arr[i_cnfg, :])
                 println("  Source: $i_src of $(PC.parms.N_src)")
 
-                @time "      Read perambulators" begin
+                @time "    Read perambulators" begin
                     PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
                     PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
                                           τ_charm_αkβlt)
@@ -211,6 +211,9 @@ function main()
             println()
         end
         println("\n")
+
+        # Run garbage collector
+        GC.gc()
     end
 
     # Broadcast correlators to all ranks
