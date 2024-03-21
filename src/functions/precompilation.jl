@@ -38,6 +38,9 @@ PrecompileTools.@setup_workload begin
     Γ, Γbar = γ[5], -γ[5]
 
     PrecompileTools.@compile_workload begin
+        pseudoscalar_contraction_p0!(Cₜ, τ_αkβlt, t₀)
+        pseudoscalar_contraction!(Cₜ, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
+        pseudoscalar_sparse_contraction!(Cₜ, τ_αkβlt, sparse_modes_arrays, t₀, p_arr[1])
         meson_connected_contraction_p0!(Cₜ, τ_αkβlt, τ_αkβlt, Γ, Γbar, t₀)
         meson_connected_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, Γ, Γbar, t₀, iₚ)
         meson_connected_sparse_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
