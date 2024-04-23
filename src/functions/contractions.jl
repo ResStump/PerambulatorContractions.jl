@@ -149,7 +149,7 @@ function pseudoscalar_sparse_contraction!(
         end
 
         # Normalization
-        C *= (prod(parms.Nₖ)/N_points)^2
+        C *= (prod(parms.Nₖ)÷N_points)^2
 
         # Circularly shift time such that t₀=0
         Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
