@@ -174,6 +174,9 @@ function main()
             println()
         end
         println("\n")
+
+        # Run garbage collector
+        GC.gc()
     end
 
     # Broadcast correlators to all ranks
