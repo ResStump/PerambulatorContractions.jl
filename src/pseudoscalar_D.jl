@@ -66,13 +66,19 @@ function correlator_file(name, p; tmp=false)
     return file
 end
 
-correlator1_file_arr = [correlator_file("pseudoscalar", p) for p in PC.parms.p_arr]
-correlator2_file_arr = [correlator_file("pseudoscalar_sparse", p) for p in PC.parms.p_arr]
+correlator_file_arr = [correlator_file("pseudoscalar_D", p) for p in PC.parms.p_arr]
 
-correlator1_file_tmp_arr = [correlator_file("pseudoscalar", p, tmp=true)
+correlator_file_tmp_arr = [correlator_file("pseudoscalar_D", p, tmp=true)
                             for p in PC.parms.p_arr]
-correlator2_file_tmp_arr = [correlator_file("pseudoscalar_sparse", p, tmp=true)
-                            for p in PC.parms.p_arr]
+
+# Use sparse modes?
+if PC.parms_toml["Correlator"]["method"] == "sparse"
+    method = "sparse"
+elseif PC.parms_toml["Correlator"]["method"] == "full"
+    method = "full"
+else
+    throw(ArgumentError("correlator method is not valid! Choose \"full\" or \"sparse\""))
+end
 
 
 # %%#############
@@ -92,8 +98,7 @@ sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
 # Correlator for each momentum
 correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
-correlators1 = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
-correlators2 = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
+correlators = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
 
 # Get momentum indices from mode doublets
 iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
@@ -106,18 +111,19 @@ function compute_contractions!(i_cnfg, i_src, t₀)
         println("    Momentum p = $p")
         iₚ = iₚ_arr[i_p]
 
-
         # Compute correlator entries
-        Cₜ = @view correlators1[i_p][:, i_src, i_cnfg]
-        Cₜ_2 = @view correlators2[i_p][:, i_src, i_cnfg]
-        @time "      pseudoscalar_contraction!       " begin
-            PC.pseudoscalar_contraction!(Cₜ, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ,
-                                         t₀, iₚ)
-        end
-        @time "      pseudoscalar_sparse_contraction!" begin
-            PC.pseudoscalar_sparse_contraction!(
-                Cₜ_2, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p
-            )
+        Cₜ = @view correlators[i_p][:, i_src, i_cnfg]
+        if method == "full"
+            @time "      pseudoscalar_contraction!       " begin
+                PC.pseudoscalar_contraction!(Cₜ, τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ,
+                                             t₀, iₚ)
+            end
+        else
+            @time "      pseudoscalar_sparse_contraction!" begin
+                PC.pseudoscalar_sparse_contraction!(
+                    Cₜ, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p
+                )
+            end
         end
         println()
     end
@@ -137,11 +143,14 @@ function main()
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
-            @time "  Read sparse modes " begin
-                PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
-            end
-            @time "  Read mode doublets" begin
-                PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+            if method == "full"
+                @time "  Read sparse modes " begin
+                    PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+                end
+            else
+                @time "  Read mode doublets" begin
+                    PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+                end
             end
             println()
 
@@ -163,18 +172,19 @@ function main()
 
             # Temporary store correlators 
             @time "  Write tmp correlators" begin
-                PC.write_correlator.(correlator1_file_tmp_arr, correlators1, PC.parms.p_arr)
-                PC.write_correlator.(correlator2_file_tmp_arr, correlators2, PC.parms.p_arr)
+                PC.write_correlator.(correlator_file_tmp_arr, correlators, PC.parms.p_arr)
             end
             println()
         end
         println("\n")
+
+        # Run garbage collector
+        GC.gc()
     end
 
     # Broadcast correlators to all ranks
     @time "Broadcast correlators" begin
-        PC.broadcast_correlators!.(correlators1)
-        PC.broadcast_correlators!.(correlators2)
+        PC.broadcast_correlators!.(correlators)
     end
 
     # Store correlators and remove tmp correlators
@@ -182,14 +192,12 @@ function main()
 
     if myrank == 0
         @time "Write correlators" begin
-            PC.write_correlator.(correlator1_file_arr, correlators1, PC.parms.p_arr)
-            PC.write_correlator.(correlator2_file_arr, correlators2, PC.parms.p_arr)
+            PC.write_correlator.(correlator_file_arr, correlators, PC.parms.p_arr)
         end
     end
 
     @time "Remove tmp correlators" begin
-        rm.(correlator1_file_tmp_arr, force=true)
-        rm.(correlator2_file_tmp_arr, force=true)
+        rm.(correlator_file_tmp_arr, force=true)
     end
 
 end
