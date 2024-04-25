@@ -142,11 +142,14 @@ function main()
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
-            @time "  Read sparse modes " begin
-                PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
-            end
-            @time "  Read mode doublets" begin
-                PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+            if method == "full"
+                @time "  Read mode doublets" begin
+                    PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+                end
+            else
+                @time "  Read sparse modes " begin
+                    PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+                end
             end
             println()
 
