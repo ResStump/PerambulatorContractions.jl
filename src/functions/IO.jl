@@ -272,9 +272,9 @@ end
     read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
 
 Read the sparse\_modes HDF5 file `sparse_modes_file` and store the sparse space positions
-at the sink `x_sink_μiₓ` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
+at the sink `x_sink_μiₓt` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
 of Laplacian) for the sink `v_sink_μiₓkt` and the source `v_src_μiₓkt` in
-`sparse_modes_arrays` = `(x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt)`.
+`sparse_modes_arrays` = `(x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt)`.
 
 ### Indices
 The last characters in the variable names describe which indices these arrays carry. The
@@ -289,13 +289,13 @@ See also: `read_sparse_modes`.
 """
 function read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
     # Unpack `sparse_modes_arrays`
-    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
     # Check if shapes are correct
-    N_dim1, N_points1 = size(x_sink_μiₓ)
-    N_dim2, N_points2, Nₜ = size(x_src_μiₓt)
-    N_color1, N_points3, N_modes1, Nₜ = size(v_sink_ciₓkt)
-    N_color2, N_points4, N_modes2, Nₜ = size(v_src_ciₓkt)
+    N_dim1, N_points1, Nₜ1 = size(x_sink_μiₓt)
+    N_dim2, N_points2, Nₜ2 = size(x_src_μiₓt)
+    N_color1, N_points3, N_modes1, Nₜ3 = size(v_sink_ciₓkt)
+    N_color2, N_points4, N_modes2, Nₜ4 = size(v_src_ciₓkt)
     if N_dim1 != N_dim2 != 3
         throw(DimensionMismatch("the space is not three dimensional."))
     end
@@ -308,12 +308,12 @@ function read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
     if N_modes1 != N_modes2 != parms.N_modes
         throw(DimensionMismatch("number of modes don't match."))
     end
-    if Nₜ != parms.Nₜ
-        throw(DimensionMismatch("dimensions of time axis don't macht."))
+    if Nₜ1 != Nₜ2 != Nₜ3 != Nₜ != parms.Nₜ
+        throw(DimensionMismatch("dimensions of time axis don't match."))
     end
 
     hdf5_file = HDF5.h5open(string(sparse_modes_file), "r")
-    x_sink_μiₓ[:] = read(hdf5_file["sparse_space_sink"])
+    x_sink_μiₓt[:] = read(hdf5_file["sparse_space_sink"])
     x_src_μiₓt[:] = read(hdf5_file["sparse_space_src"])
     v_sink_ciₓkt[:] = read(hdf5_file["sparse_modes_sink"])
     v_src_ciₓkt[:] = read(hdf5_file["sparse_modes_src"])
@@ -324,10 +324,10 @@ end
 
 @doc raw"""
     read_sparse_modes(sparse_modes_file)
-        -> x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
+        -> x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
 
 Read the sparse\_modes HDF5 file `sparse_modes_file` and return the sparse space positions
-at the sink `x_sink_μiₓ` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
+at the sink `x_sink_μiₓt` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
 of Laplacian) for the sink `v_sink_μiₓkt` and the source `v_src_μiₓkt`.
 
 ### Indices
@@ -382,7 +382,7 @@ end
 
 Write the sparse modes in `sparse_modes_arrays` to the HDF5 file `sparse_modes_file`.
 
-The `sparse_modes_arrays` must contain the sparse space positions at the sink `x_sink_μiₓ`
+The `sparse_modes_arrays` must contain the sparse space positions at the sink `x_sink_μiₓt`
 and the source `x_src_μiₓt`, and the sparse modes (eigenvectors of Laplacian) for the sink
 `v_sink_μiₓkt` and the source `v_src_μiₓkt`.
 
@@ -390,12 +390,12 @@ See the documentation of the `read_sparse_modes` function for further informatio
 """
 function write_sparse_modes(sparse_modes_file, sparse_modes_arrays)
     # Unpack `sparse_modes_arrays`
-    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
     hdf5_file = HDF5.h5open(string(sparse_modes_file), "w")
 
     # Write sparse spaces
-    hdf5_file["sparse_space_sink"] = x_sink_μiₓ
+    hdf5_file["sparse_space_sink"] = x_sink_μiₓt
     hdf5_file["sparse_space_src"] = x_src_μiₓt
 
     # Write sparse modes
@@ -404,7 +404,7 @@ function write_sparse_modes(sparse_modes_file, sparse_modes_arrays)
 
     # Set attributes
     HDF5.attrs(hdf5_file["sparse_space_sink"])["DIMENSION_LABELS"] =
-        ["position", "component"]
+        ["sink t", "position", "component"]
     HDF5.attrs(hdf5_file["sparse_space_src"])["DIMENSION_LABELS"] =
         ["source t", "position", "component"]
     HDF5.attrs(hdf5_file["sparse_modes_sink"])["DIMENSION_LABELS"] =

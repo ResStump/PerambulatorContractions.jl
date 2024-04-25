@@ -10,10 +10,10 @@ function increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays, N_se
     if mod(N_sep_new, 2) != 0
         throw(ArgumentError("'N_sep_new' has to be a multiple of 2."))
     end
-    x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
     # Determine number of points and seperation in current sparse modes
-    N_points = size(x_sink_μiₓ)[2]
+    N_points = size(x_sink_μiₓt)[2]
     N_sep = (prod(parms.Nₖ)/N_points)^(1/3)
     N_sep = round(Int, N_sep)
 
@@ -29,11 +29,11 @@ function increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays, N_se
     
     iₓ_new_arr = vec(iₓ_arr[1:division:end, 1:division:end, 1:division:end])
 
-    x_sink_new_μiₓ, x_src_new_μiₓt, v_sink_new_ciₓkt, v_src_new_ciₓkt =
+    x_sink_new_μiₓt, x_src_new_μiₓt, v_sink_new_ciₓkt, v_src_new_ciₓkt =
         sparse_modes_arrays_new
 
     # Fill new sparse spaces/modes at sink
-    x_sink_new_μiₓ[:] = x_sink_μiₓ[:, iₓ_new_arr]
+    x_sink_new_μiₓt[:] = x_sink_μiₓt[:, iₓ_new_arr, :]
     v_sink_new_ciₓkt[:] = v_sink_ciₓkt[:, iₓ_new_arr, :, :]
 
     # Fill new sparse spaces/modes at src

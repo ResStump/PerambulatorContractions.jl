@@ -25,11 +25,11 @@ PrecompileTools.@setup_workload begin
     τ_αkβlt = rand(ComplexF64, 4, N_modes, 4, N_modes, Nₜ)
 
     # Sparse modes
-    x_sink_μiₓ = rand(ComplexF64, 3, N_points)
-    x_src_μiₓt = rand(ComplexF64, 3, N_points, Nₜ)
+    x_sink_μiₓt = rand(Int32, 3, N_points, Nₜ)
+    x_src_μiₓt = rand(Int32, 3, N_points, Nₜ)
     v_sink_ciₓkt = rand(ComplexF64, 3, N_points, N_modes, Nₜ)
     v_src_ciₓkt = rand(ComplexF64, 3, N_points, N_modes, Nₜ)
-    sparse_modes_arrays = x_sink_μiₓ, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
+    sparse_modes_arrays = x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
 
     # Correlator
     Cₜ = Vector{ComplexF64}(undef, parms.Nₜ)
