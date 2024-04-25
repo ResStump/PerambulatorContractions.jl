@@ -96,7 +96,7 @@ n_cnfg = PC.parms.cnfg_indices[1]
 τ_αkβlt = PC.allocate_perambulator()
 τ_charm_αkβlt = PC.allocate_perambulator()
 
-# mode doublets arrays
+# Mode doublets arrays
 if method == "full"
     Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
 end

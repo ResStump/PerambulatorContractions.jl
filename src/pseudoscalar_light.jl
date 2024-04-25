@@ -1,10 +1,10 @@
 # %%########################################################################################
-# pseudoscalar.jl
+# pseudoscalar_light.jl
 #
-# Compute pseudoscalar correlators from perambulators, mode doublets and sparse modes
+# Compute light pseudoscalar correlators from perambulators, mode doublets and sparse modes
 #
 # Usage:
-#   pseudoscalar.jl -i <parms file>
+#   pseudoscalar_light.jl -i <parms file>
 #
 # where <parms file> is a toml file containing the required parameters
 #
