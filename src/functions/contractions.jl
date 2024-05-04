@@ -28,7 +28,7 @@ function pseudoscalar_contraction_p0!(
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
 
         # Tensor contraction
-        TO.@tensoropt begin
+        TO.@tensor begin
             C = τ₁_αkβl_t[α, k, β, l] * conj(τ₂_αkβl_t[α, k, β, l])
         end
 
@@ -76,7 +76,7 @@ function pseudoscalar_contraction!(
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
         
         # Tensor contraction
-        TO.@tensoropt begin
+        TO.@tensor order=(l, α, β, l', k, k') begin
             C = Φ_kl_tiₚ[k, k'] * τ₁_αkβl_t[α, k', β, l'] *
                 conj(Φ_kl_t₀iₚ[l, l']) * conj(τ₂_αkβl_t[α, k, β, l])
         end
@@ -142,7 +142,8 @@ function pseudoscalar_sparse_contraction!(
         exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
 
         # Tensor contraction
-        TO.@tensoropt begin
+        TO.@tensoropt (a=>3, b=>3, α=>4, β=>4, l=>32, k=>32, l'=>32, k'=>32,
+                       iₓ=>512, iₓ'=>512) begin
             C = conj(v_sink_ciₓk_t[a, iₓ', k]) * 
                 (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ', k'] *
                 τ₁_αkβl_t[α, k', β, l'] *
@@ -152,7 +153,7 @@ function pseudoscalar_sparse_contraction!(
         end
 
         # Normalization
-        C *= (prod(parms.Nₖ)÷N_points)^2
+        C *= (prod(parms.Nₖ)/N_points)^2
 
         # Circularly shift time such that t₀=0
         Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
@@ -199,7 +200,7 @@ function meson_connected_contraction_p0!(
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
 
         # Tensor contraction
-        TO.@tensoropt begin
+        TO.@tensor order=(k, l, α', α, β, β') begin
             C = γ₅Γ[α, α'] * τ₁_αkβl_t[α', k, β, l] *
                 Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
         end
@@ -248,7 +249,7 @@ function meson_connected_contraction!(
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
         
         # Tensor contraction
-        TO.@tensoropt begin
+        TO.@tensoropt (α=>4, β=>4, α'=>4, β'=>4, l=>32, k=>32, l'=>32, k'=>32) begin
             C = Φ_kl_tiₚ[k, k'] *
                 γ₅Γ[α, α'] * τ₁_αkβl_t[α', k', β, l'] *
                 conj(Φ_kl_t₀iₚ[l, l']) * 
@@ -315,7 +316,8 @@ function meson_connected_sparse_contraction!(
         exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
 
         # Tensor contraction
-        TO.@tensoropt begin
+        TO.@tensoropt (a=>3, b=>3, α=>4, β=>4, α'=>4, β'=>4, l=>32,k=>32, l'=>32, k'=>32,
+                       iₓ=>512, iₓ'=>512) begin
             C = conj(v_sink_ciₓk_t[a, iₓ', k]) * 
                 (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ', k'] *
                 γ₅Γ[α, α'] * τ₁_αkβl_t[α', k', β, l'] *
