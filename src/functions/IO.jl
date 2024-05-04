@@ -349,6 +349,17 @@ function read_sparse_modes(sparse_modes_file)
 end
 
 @doc raw"""
+    read_correlator(correlator_file) -> correlator
+
+Read the correlator from the the HDF5 file 'correlator_file'.
+"""
+function read_correlator(correlator_file)
+    correlator = HDF5.h5read(string(correlator_file), "Correlator")
+
+    return correlator
+end
+
+@doc raw"""
     write_correlator(correlator_file, correlator)
 
 Write `correlator` and its dimension labels to the HDF5 file `correlator_file`.

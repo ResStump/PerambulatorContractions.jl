@@ -14,6 +14,7 @@ import MKL
 import LinearAlgebra as LA
 import MPI
 import HDF5
+import DelimitedFiles as DF
 import FilePathsBase: /, Path
 import BenchmarkTools.@btime
 import PerambulatorContractions as PC
@@ -77,6 +78,15 @@ else
     throw(ArgumentError("correlator method is not valid! Choose \"full\" or \"sparse\""))
 end
 
+# Continuation run?
+finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
+continuation_run = PC.parms_toml["Various"]["continuation_run"]
+if continuation_run
+    finished_cnfgs = vec(DF.readdlm(string(finished_cnfgs_file), '\n', Int))
+else
+    finished_cnfgs = []
+end
+
 
 # %%#############
 # Allocate Arrays
@@ -99,8 +109,12 @@ if method == "sparse"
 end
 
 # Correlator for each momentum
-correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
-correlators = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
+if continuation_run
+    correlators = PC.read_correlator.(correlator_file_tmp_arr)
+else
+    correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
+    correlators = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
+end
 
 # Get momentum indices from mode doublets
 iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
@@ -139,6 +153,9 @@ function main()
         if !PC.is_my_cnfg(i_cnfg)
             continue
         end
+        if continuation_run && (n_cnfg in finished_cnfgs)
+            continue
+        end
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
@@ -167,9 +184,12 @@ function main()
                 println()
             end
 
-            # Temporary store correlator
-            @time "  Write tmp correlator" begin
+            # Temporary store correlator and update finished_cnfgs
+            @time "  Write tmp files" begin
                 PC.write_correlator.(correlator_file_tmp_arr, correlators, PC.parms.p_arr)
+
+                push!(finished_cnfgs, n_cnfg)
+                DF.writedlm(string(finished_cnfgs_file), finished_cnfgs, '\n')
             end
             println()
         end
@@ -193,8 +213,9 @@ function main()
         end
     end
 
-    @time "Remove tmp correlator" begin
+    @time "Remove tmp files" begin
         rm.(correlator_file_tmp_arr, force=true)
+        rm(finished_cnfgs_file, force=true)
     end
 
 end
