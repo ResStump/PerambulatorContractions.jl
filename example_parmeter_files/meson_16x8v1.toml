@@ -36,3 +36,6 @@ method          = "full"  # "full" or "sparse"
 
 ["Increase Separation"]
 N_sep_new       = 4
+
+["Various"]
+continuation_run = false
