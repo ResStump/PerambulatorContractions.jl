@@ -22,7 +22,7 @@ function pseudoscalar_contraction_p0!(
     Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, t₀::Integer
 )
     # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # perambulators at sink (index `iₜ`)
         τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :, iₜ]
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
@@ -69,7 +69,7 @@ function pseudoscalar_contraction!(
     Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
 
     # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # Mode doublet and perambulators at sink time t (index `iₜ`)
         Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
         τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
@@ -130,7 +130,7 @@ function pseudoscalar_sparse_contraction!(
     exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
     
     # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # Perambulators, sink position and Laplace modes at sink time t (index `iₜ`)
         τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
@@ -194,7 +194,7 @@ function meson_connected_contraction_p0!(
     Γbarγ₅ = -Γbar*γ[5]
 
     # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # perambulators at sink (index `iₜ`)
         τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :, iₜ]
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
@@ -242,7 +242,7 @@ function meson_connected_contraction!(
     Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
 
     # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # Mode doublet and perambulators at sink time t (index `iₜ`)
         Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
         τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
@@ -304,7 +304,7 @@ function meson_connected_sparse_contraction!(
     exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
     
     # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # Perambulators, sink position and Laplace modes at sink time t (index `iₜ`)
         τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
         τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
@@ -316,7 +316,7 @@ function meson_connected_sparse_contraction!(
         exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
 
         # Tensor contraction
-        TO.@tensoropt (a=>3, b=>3, α=>4, β=>4, α'=>4, β'=>4, l=>32,k=>32, l'=>32, k'=>32,
+        TO.@tensoropt (a=>3, b=>3, α=>4, β=>4, α'=>4, β'=>4, l=>32, k=>32, l'=>32, k'=>32,
                        iₓ=>512, iₓ'=>512) begin
             C = conj(v_sink_ciₓk_t[a, iₓ', k]) * 
                 (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ', k'] *
