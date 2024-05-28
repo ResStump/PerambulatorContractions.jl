@@ -11,7 +11,7 @@ import FilePathsBase: /, Path
 import PrecompileTools
 
 include("functions/allocate_arrays.jl")
-include("functions/contractions.jl")
+include("functions/contractions_meson.jl")
 include("functions/IO.jl")
 include("functions/mpi_utils.jl")
 include("functions/utils.jl")
