@@ -38,8 +38,8 @@ function DD_local_contractons!(
     # Set correlator C_tnmn̄m̄iₚ to zero
     C_tnmn̄m̄iₚ .= 0
 
-    # Loop over all sink time indice
-    for iₜ in 1:parms.Nₜ
+    # Loop over all sink time indices (using multithreading)
+    Threads.@threads for iₜ in 1:parms.Nₜ
         # Perambulators, sink position and Laplace modes at sink time t (index `iₜ`)
         τ_charm_αkβl_t = @view τ_charm_αkβlt[:, :, :, :, iₜ]
         τ_light_αkβl_t = @view τ_light_αkβlt[:, :, :, :, iₜ]
@@ -51,9 +51,8 @@ function DD_local_contractons!(
         end
 
         # Loop over sink position iₓ′ and source position iₓ
-        # (using multithreading in inner for loop)
         for iₓ′ in 1:N_points
-        Threads.@threads for iₓ in 1:N_points
+        for iₓ in 1:N_points
             # Laplace modes at sink time t (index `iₜ`) and position iₓ′
             v_sink_ck_iₓ′t = @view v_sink_ciₓkt[:, iₓ′, :, iₜ]
 
