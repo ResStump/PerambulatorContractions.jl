@@ -16,16 +16,18 @@ function is_my_cnfg(i_cnfg)
 end
 
 @doc raw"""
-    broadcast_correlators!(correlator)
+    broadcast_correlators!(correlator, cnfg_dim=3)
 
 Broadcast `correlator` to all ranks by assuming that each rank computed that part of
-`correlator` for which `is_my_cnfg(i_cnfg) == true`.
+`correlator` for which `is_my_cnfg(i_cnfg) == true`. The integer `cnfg_dim` specifies which
+dimension in `correlator` is the configuration index (default is 3).
 """
-function broadcast_correlators!(correlator)
+function broadcast_correlators!(correlator, cnfg_dim=3)
     # Check size of correlator
-    Nₜ, N_src, N_cnfg = size(correlator)
-    if Nₜ != parms.Nₜ || N_src != parms.N_src || N_cnfg != parms.N_cnfg
-        throw(ArgumentError("the correlator doesn't have the correct size."))
+    N_cnfg = size(correlator)[cnfg_dim]
+    if N_cnfg != parms.N_cnfg
+        throw(ArgumentError("the correlator doesn't have the right number of "*
+                            "configurations."))
     end
 
     comm = MPI.COMM_WORLD
@@ -33,25 +35,27 @@ function broadcast_correlators!(correlator)
 
     N_cnfg_per_rank = ceil(Int, parms.N_cnfg/N_ranks)
     for rank in 0:N_ranks-1
-        # Determine start and end of local correlator
+        # Determine start and end of local correlator data
         first_cnfg = 1 + N_cnfg_per_rank*rank
         last_cnfg = min(N_cnfg_per_rank*(rank+1), parms.N_cnfg)
 
-        MPI.Bcast!(@view(correlator[:, :, first_cnfg:last_cnfg]), rank, comm)
+        MPI.Bcast!(selectdim(correlator, cnfg_dim, first_cnfg:last_cnfg), rank, comm)
     end
 end
 
 @doc raw"""
-    send_correlator_to_root!(correlator)
+    send_correlator_to_root!(correlator, cnfg_dim=3)
 
 Send `correlator` to root (rank 0) by assuming that each rank computed that part of
-`correlator` for which `is_my_cnfg(i_cnfg) == true`.
+`correlator` for which `is_my_cnfg(i_cnfg) == true`. The integer `cnfg_dim` specifies which
+    dimension in `correlator` is the configuration index (default is 3).
 """
-function send_correlator_to_root!(correlator)
+function send_correlator_to_root!(correlator, cnfg_dim=3)
     # Check size of correlator
-    Nₜ, N_src, N_cnfg = size(correlator)
-    if Nₜ != parms.Nₜ || N_src != parms.N_src || N_cnfg != parms.N_cnfg
-        throw(ArgumentError("the correlator doesn't have the correct size."))
+    N_cnfg = size(correlator)[cnfg_dim]
+    if N_cnfg != parms.N_cnfg
+        throw(ArgumentError("the correlator doesn't have the right number of "*
+                            "configurations."))
     end
 
     comm = MPI.COMM_WORLD
@@ -64,7 +68,7 @@ function send_correlator_to_root!(correlator)
         first_cnfg = 1 + N_cnfg_per_rank*rank
         last_cnfg = min(N_cnfg_per_rank*(rank+1), parms.N_cnfg)
         
-        correlator_view = @view(correlator[:, :, first_cnfg:last_cnfg])
+        correlator_view = selectdim(correlator, cnfg_dim, first_cnfg:last_cnfg)
         if myrank == rank
             MPI.Send(correlator_view, comm, dest=0)
         elseif myrank == 0
