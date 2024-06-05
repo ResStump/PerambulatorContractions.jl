@@ -19,7 +19,7 @@ mode doublets.
 """
 function allocate_mode_doublets(mode_doublets_file)
     # Get number of momenta in mode doublets
-    Nₚ, _ = size(read_mode_doublet_momenta(mode_doublets_file))
+    Nₚ = length(read_mode_doublet_momenta(mode_doublets_file))
 
     # Allocate array
     Φ_kltiₚ = Array{ComplexF64}(undef, parms.N_modes, parms.N_modes, parms.Nₜ, Nₚ)

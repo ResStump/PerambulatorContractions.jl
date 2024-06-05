@@ -58,7 +58,8 @@ function read_parameters()
     # Add information about program to `parms_toml` (as string)
     parms_toml["Program Information"] =
         "Julia version = $VERSION\n"*
-        "$(@__MODULE__) version = $(pkgversion(@__MODULE__))\n"
+        "$(@__MODULE__) version = $(pkgversion(@__MODULE__))\n"*
+        "Program file = $PROGRAM_FILE\n"
 
     # Read source times
     tsrc_list = DelimitedFiles.readdlm(
@@ -107,8 +108,14 @@ function read_parameters()
     N_modes = size(file["perambulator"])[4]
     close(file)
 
-    # Momentum
-    p_arr = parms_toml["Momenta"]["p"]
+    # Momentuma
+    if parms_toml["Momenta"]["p"] == "all"
+        mode_doublet_file = mode_doublets_dir/
+            "mode_doublets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
+        p_arr = read_mode_doublet_momenta(mode_doublet_file)
+    else
+        p_arr = parms_toml["Momenta"]["p"]
+    end
 
     # Store all parameters
     global parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
@@ -185,8 +192,11 @@ Read the mode doublets HDF5 file `mode_doublets_file` and return the momenta `p_
 function read_mode_doublet_momenta(mode_doublets_file)
     # Read momenta from and transpose them such that the p_arr[iₚ, :] is the iₚ'th momentum
     hdf5_file = HDF5.h5open(string(mode_doublets_file), "r")
-    p_arr = transpose(read(hdf5_file["axes"]["momenta"]))
+    p_μiₚ = read(hdf5_file["axes"]["momenta"])
     close(hdf5_file)
+
+    # Convert to vector of vectors
+    p_arr = [collect(p) for p in eachcol(p_μiₚ)]
 
     return p_arr
 end
@@ -201,7 +211,7 @@ function momentum_indices_mode_doublets(mode_doublets_file)
     p_arr_all = read_mode_doublet_momenta(mode_doublets_file)
 
     # Find the indices for each momentum in parms.p_arr
-    iₚ_arr = [findfirst(p_ -> p_ == p, eachrow(p_arr_all)) for p in parms.p_arr]
+    iₚ_arr = [findfirst(p_ -> p_ == p, p_arr_all) for p in parms.p_arr]
     if any(isnothing.(iₚ_arr))
         throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
     end
@@ -360,10 +370,11 @@ function read_correlator(correlator_file)
 end
 
 @doc raw"""
-    write_correlator(correlator_file, correlator)
+    write_correlator(correlator_file, correlator, p=nothing)
 
 Write `correlator` and its dimension labels to the HDF5 file `correlator_file`.
-Additionally, also write the parameter file `parms_toml_string` to it.
+Additionally, also write the parameter file `parms_toml_string`  and program information 
+to it.
 """
 function write_correlator(correlator_file, correlator, p=nothing)
     hdf5_file = HDF5.h5open(string(correlator_file), "w")
@@ -376,6 +387,48 @@ function write_correlator(correlator_file, correlator, p=nothing)
     if !isnothing(p)
         hdf5_file["momentum"] = p
     end
+
+    # Write parameter file
+    hdf5_file["parms.toml"] = parms.parms_toml_string
+
+    # Write program information
+    hdf5_file["Program Information"] = parms_toml["Program Information"]
+    
+    close(hdf5_file)
+
+    return
+end
+
+@doc raw"""
+    write_correlator(correlator_file, correlator, p_arr, mom_dim, labels)
+
+Write `correlator` to the HDF5 file `correlator_file`. The data for the different momenta
+which are assumend to be along dimension `mom_dim` are stored in individual data
+sets. They are labeled according to the vector with momenta `p_arr`. The array of strings `labels`
+specifies the axis labels of the correlator data.
+Additionally, also write the parameter file `parms_toml_string` and program information 
+to it.
+"""
+function write_correlator(correlator_file, correlator, p_arr, mom_dim, labels)
+    # Check if number of momenta is correct
+    N_mom = size(correlator)[mom_dim]
+    if N_mom != length(p_arr)
+        throw(DimensionMismatch("number of momenta don't match."))
+    end
+
+    # Check if number of attributes is correct
+    if (ndims(correlator)-1) != length(labels)
+        throw(DimensionMismatch("number of labels not correct."))
+    end
+
+    hdf5_file = HDF5.h5open(string(correlator_file), "w")
+
+    # Write correlator with dimension labels
+    for (iₚ, p) in enumerate(p_arr)
+        p_str = "p"*join(p, ",")
+        hdf5_file["Correlator/$p_str"] = selectdim(correlator, mom_dim, iₚ)
+    end
+    HDF5.attributes(hdf5_file["Correlator"])["DIMENSION_LABELS"] = labels
 
     # Write parameter file
     hdf5_file["parms.toml"] = parms.parms_toml_string
