@@ -31,8 +31,12 @@ PrecompileTools.@setup_workload begin
     v_src_ciₓkt = rand(ComplexF64, 3, N_points, N_modes, Nₜ)
     sparse_modes_arrays = x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt
 
-    # Correlator
+    # Meson correlator
     Cₜ = Vector{ComplexF64}(undef, parms.Nₜ)
+
+    # Meson-meson correlator
+    correlator_size = (parms.Nₜ, 1, 1, 1, 1, length(parms.p_arr))
+    C_tnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
 
     # Matrices in interpolstors
     Γ, Γbar = γ[5], -γ[5]
@@ -45,5 +49,7 @@ PrecompileTools.@setup_workload begin
         meson_connected_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, Γ, Γbar, t₀, iₚ)
         meson_connected_sparse_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
                                             Γ, Γbar, t₀, p_arr[1])
+        DD_local_contractons!(C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
+                              [Γ], t₀, p_arr)
     end
 end
