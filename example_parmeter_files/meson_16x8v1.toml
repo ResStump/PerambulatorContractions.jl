@@ -29,7 +29,7 @@ label_charm      = "perambulator_charm_tsrc"
 
 ["Momenta"]
 p       = [[0, 0, 0],
-           [1, 0, 0]]
+           [1, 0, 0]] # or "all"
 
 ["Correlator"]
 method          = "full"  # "full" or "sparse"
