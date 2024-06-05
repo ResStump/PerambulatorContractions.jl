@@ -40,7 +40,7 @@ end
     _, N_points, _ = size(x_sink_μiₓt)
 
     # Loop over all momenta
-    for (iₚ, p) in enumerate(eachrow(p_arr))
+    for (iₚ, p) in enumerate(p_arr)
         # Loop over all sink time indice
         for iₜ in 1:PC.parms.Nₜ
             # Laplace modes at sink time t (index 'iₜ')
@@ -74,7 +74,7 @@ end
     PC.pseudoscalar_contraction_p0!(Cₜ_mode_doublets_p0, τ_αkβlt, t₀)
 
     # Loop over all momenta
-    for (iₚ, p) in enumerate(eachrow(p_arr))
+    for (iₚ, p) in enumerate(p_arr)
         PC.pseudoscalar_contraction!(Cₜ_mode_doublets, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
         PC.pseudoscalar_sparse_contraction!(Cₜ_full_modes, τ_αkβlt, sparse_modes_arrays,
                                             t₀, p)
@@ -94,7 +94,7 @@ end
     # Source time t₀ and momentum index iₚ
     t₀ = PC.parms.tsrc_arr[1, 1]
     iₚ = 1
-    p = p_arr[iₚ, :]
+    p = p_arr[iₚ]
 
     # For zero momentum
     PC.pseudoscalar_contraction_p0!(Cₜ_1, τ_αkβlt, t₀)
@@ -119,7 +119,7 @@ end
     # Source time t₀ and momentum index iₚ
     t₀ = PC.parms.tsrc_arr[1, 1]
     iₚ = 1
-    p = p_arr[iₚ, :]
+    p = p_arr[iₚ]
 
     # Matrices in interpolstors
     Γ_arr = [PC.γ[1], PC.γ[2], PC.γ[3], PC.γ[5]*PC.γ[4], PC.γ[5]]
@@ -195,7 +195,7 @@ end
     # Source time t₀ and momentum index iₚ
     t₀ = PC.parms.tsrc_arr[1, 1]
     iₚ = 1
-    p = p_arr[iₚ, :]
+    p = p_arr[iₚ]
 
     # Matrices in interpolstors
     Γ, Γbar = PC.γ[5], -PC.γ[5]
