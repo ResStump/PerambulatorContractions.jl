@@ -150,7 +150,7 @@ function main()
                 compute_contractions!(t₀)
                 
                 # Store Correlator
-                @time "  Write correlator" begin
+                @time "    Write correlator" begin
                     name = "DD_local"
                     PC.write_correlator(correlator_file(name, n_cnfg, t₀), C_tnmn̄m̄iₚ,
                                         PC.parms.p_arr, mom_dim, labels)
@@ -167,6 +167,9 @@ function main()
         # Run garbage collector
         GC.gc()
     end
+
+    # Wait until all ranks finished
+    MPI.Barrier(comm)
 
     # Remove finished_cnfgs file
     rm(finished_cnfgs_file, force=true)
