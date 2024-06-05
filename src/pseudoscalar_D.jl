@@ -161,11 +161,11 @@ function main()
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
             if method == "full"
-                @time "  Read sparse modes " begin
+                @time "  Read mode doublets" begin
                     PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
                 end
             else
-                @time "  Read mode doublets" begin
+                @time "  Read sparse modes" begin
                     PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
                 end
             end
@@ -175,7 +175,7 @@ function main()
             for (i_src, t₀) in enumerate(PC.parms.tsrc_arr[i_cnfg, :])
                 println("  Source: $i_src of $(PC.parms.N_src)")
 
-                @time "      Read perambulators" begin
+                @time "    Read perambulators" begin
                     PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
                     PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
                                           τ_charm_αkβlt)
