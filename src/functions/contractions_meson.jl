@@ -15,7 +15,7 @@ backward direction. This gives a vacuum expectation value of the form \
 If only one perambulator `τ_αkβlt` is given, it is used to propagete in
 both directions.
 
-The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
 that the source time is at the origin.
 """
 function pseudoscalar_contraction_p0!(
@@ -54,7 +54,7 @@ in backward direction. This gives a vacuum expectation value of the form \
 If only one perambulator `τ_αkβlt` is given, it is used to propagete
 in both directions.
 
-The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
 that the source time is at the origin. The index `iₚ` sets the momentum that is used from
 the mode doublets.
 """
@@ -105,7 +105,7 @@ value of the form \
 If only one perambulator
 `τ_αkβlt` is given, it is used to propagete in both directions.
 
-The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
 that the source time is at the origin. The array `p` is the integer momentum that is used
 for the momentum projection of the correlator.
 """
@@ -182,7 +182,7 @@ operators. This gives a vacuum expectation value of the form \
 `<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
 (in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
 
-The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
 that the source time is at the origin.
 """
 function meson_connected_contraction_p0!(
@@ -222,7 +222,7 @@ interpolating operators. This gives a vacuum expectation value of the form \
 `<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
 (in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
 
-The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
 that the source time is at the origin. The index `iₚ` sets the momentum that is used from
 the mode doublets.
 """
@@ -274,7 +274,7 @@ form \
 `<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
 (in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
 
-The result is store it in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
+The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
 that the source time is at the origin. The array `p` is the integer momentum that is used
 for the momentum projection of the correlator.
 """
