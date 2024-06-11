@@ -373,7 +373,7 @@ end
     write_correlator(correlator_file, correlator, p=nothing)
 
 Write `correlator` and its dimension labels to the HDF5 file `correlator_file`.
-Additionally, also write the parameter file `parms_toml_string`  and program information 
+Additionally, also write the parameter file `parms_toml_string` and program information 
 to it.
 """
 function write_correlator(correlator_file, correlator, p=nothing)
