@@ -95,7 +95,8 @@ sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(PC.parms.p_arr))
 C_tnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
 mom_dim = ndims(C_tnmn̄m̄iₚ)
-labels = ["t", "Gamma1", "Gamma2", "Gamma1 bar", "Gamma2 bar"]
+# Reversed order in Julia
+labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
 
 # Get momentum indices from mode doublets
 iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
