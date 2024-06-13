@@ -38,12 +38,13 @@ function DD_local_contractons!(
     # Convert momentum array to contiguous array
     p_μiₚ = stack(p_arr)
 
-    # Set correlator C_tnmn̄m̄iₚ to zero
+    # Set correlator C_tnmn̄m̄iₚ to zero and permute such that time is slowest changing index
     C_tnmn̄m̄iₚ .= 0
+    C_nmn̄m̄iₚt = permutedims(C_tnmn̄m̄iₚ, [2, 3, 4, 5, 6, 1])
 
     # Loop over all sink time indices (using multithreading)
     Threads.@threads for iₜ in 1:parms.Nₜ
-        # Perambulators, sink position and Laplace modes at sink time t (index `iₜ`)
+        # Perambulators at sink time t (index `iₜ`)
         τ_charm_αkβl_t = @view τ_charm_αkβlt[:, :, :, :, iₜ]
         τ_light_αkβl_t = @view τ_light_αkβlt[:, :, :, :, iₜ]
 
@@ -65,18 +66,18 @@ function DD_local_contractons!(
             # Tensor contractions
             #####################
 
-            # Smeared charm propagator
+            # Smeared charm propagator (forward direction)
             TO.@tensoropt (k, l) begin
-                D⁻¹_charm_αaβb[α, a, β, b] :=
+                D⁻¹_charm_αaβb_iₓ′iₓ[α, a, β, b] :=
                     v_sink_ck_iₓ′t[a, k] * 
                     τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
             end
 
-            # Smeared light propagator (adjoint)
+            # Smeared light propagator (backward direction)
             TO.@tensoropt (k, l) begin
-                D⁻¹′_light_αaβb[α, a, β, b] :=
-                    v_src_ck_iₓt₀[a, k] *
-                    γ₅τ_conjγ₅_light_αkβl_t[β, l, α, k] * conj(v_sink_ck_iₓ′t)[b, l]
+                D⁻¹_light_αaβb_iₓiₓ′[α, a, β, b] :=
+                    conj(v_sink_ck_iₓ′t)[b, l] *
+                    γ₅τ_conjγ₅_light_αkβl_t[β, l, α, k] * v_src_ck_iₓt₀[a, k]
             end
 
             # Disconnected part
@@ -89,8 +90,8 @@ function DD_local_contractons!(
             end =#
             TO.@tensoropt begin
                 C_disc_nn̄[n, n̄] :=
-                    Γ_αβn[α, α', n] * D⁻¹_charm_αaβb[α', a, β, b] *
-                    Γbar_αβn[β, β', n̄] * D⁻¹′_light_αaβb[β', b, α, a]
+                    Γ_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β, b] *
+                    Γbar_αβn[β, β', n̄] * D⁻¹_light_αaβb_iₓiₓ′[β', b, α, a]
             end
 
             # Connected part
@@ -107,10 +108,10 @@ function DD_local_contractons!(
             end =#
             TO.@tensoropt begin
                 C_conn_nmn̄m̄[n, m, n̄, m̄] :=
-                    Γ_αβn[α, α', n] * D⁻¹_charm_αaβb[α', a, β, b] *
-                    Γbar_αβn[β, β', m̄] * D⁻¹′_light_αaβb[β', b, α_, ã] *
-                    Γ_αβn[α_, α_', m] * D⁻¹_charm_αaβb[α_', ã, β_, b̃] *
-                    Γbar_αβn[β_, β_', n̄] * D⁻¹′_light_αaβb[β_', b̃, α, a]
+                    Γ_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β, b] *
+                    Γbar_αβn[β, β', m̄] * D⁻¹_light_αaβb_iₓiₓ′[β', b, α_, ã] *
+                    Γ_αβn[α_, α_', m] * D⁻¹_charm_αaβb_iₓ′iₓ[α_', ã, β_, b̃] *
+                    Γbar_αβn[β_, β_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[β_', b̃, α, a]
             end
 
             # Combine connected and disconnected part
@@ -126,14 +127,17 @@ function DD_local_contractons!(
             exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
             for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
                 # Use Δt as time such that t₀=0
-                C_nmn̄m̄_Δtiₚ = @view C_tnmn̄m̄iₚ[i_Δt, :, :, :, :, iₚ]
+                C_nmn̄m̄_iₚΔt = @view C_nmn̄m̄iₚt[:, :, :, :, iₚ, i_Δt]
                 TO.@tensoropt begin
-                    C_nmn̄m̄_Δtiₚ[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                    C_nmn̄m̄_iₚΔt[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
                 end
             end
         end
         end
     end
+
+    # Permute correlator back
+    permutedims!(C_tnmn̄m̄iₚ, C_nmn̄m̄iₚt, [6, 1, 2, 3, 4, 5])
 
     # Normalization
     C_tnmn̄m̄iₚ *= (prod(parms.Nₖ)/N_points)^2
