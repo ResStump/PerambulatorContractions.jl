@@ -1,12 +1,12 @@
 # %%########################################################################################
 # DD_local.jl
 #
-# Compute DD tetraquark correlators from perambulators, mode doublets and sparse modes
+# Compute local DD correlators from perambulators and sparse modes.
 #
 # Usage:
 #   DD_local.jl -i <parms file>
 #
-# where <parms file> is a toml file containing the required parameters
+# where <parms file> is a toml file containing the required parameters.
 #
 ############################################################################################
 
@@ -30,41 +30,29 @@ if myrank != 0
 end
 
 
-# %%#############################
-# Global Parameters and Functions
-#################################
+# %%###############
+# Global Parameters
+###################
 
 # Set global parameters
 PC.read_parameters()
 
+# Set which momenta should be used
+if PC.parms_toml["Momenta"]["p"] == "all"
+    p_arr = PC.parms.p_arr
+else
+    p_arr = PC.parms_toml["Momenta"]["p"]
+end
+
+# Momentum indices in mode doublets corresponding to the momentas in p_arr
+iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
+if any(isnothing.(iₚ_arr))
+    throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
+end
+
 # Array of (monomial of) γ-matrices
 Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
 Nᵧ = length(Γ_arr)
-
-
-# File paths
-perambulator_file(n_cnfg, i_src) = PC.parms.perambulator_dir/
-    "$(PC.parms_toml["Perambulator"]["label_light"])$(i_src)_" *
-    "$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
-perambulator_charm_file(n_cnfg, i_src) = PC.parms.perambulator_charm_dir/
-    "$(PC.parms_toml["Perambulator"]["label_charm"])$(i_src)_" *
-    "$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
-mode_doublets_file(n_cnfg) = PC.parms.mode_doublets_dir/
-    "mode_doublets_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
-sparse_modes_file(n_cnfg) = PC.parms.sparse_modes_dir/
-    "sparse_modes_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
-
-
-# Correlator files
-function correlator_file(name, n_cnfg, t₀)
-    run_name = PC.parms_toml["Run name"]["name"]
-
-    file = PC.parms.result_dir/"$(run_name)_$(PC.parms.N_modes)modes_$(name)_" *
-        "n$(n_cnfg)_tsrc$(t₀).hdf5"
-    
-    return file
-end
-
 
 # Continuation run?
 finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
@@ -76,6 +64,43 @@ else
 end
 
 
+# %%############
+# File Functions
+################
+
+# File paths
+perambulator_file(n_cnfg, i_src) = PC.parms.perambulator_dir/
+    "$(PC.parms_toml["Perambulator"]["label_light"])$(i_src)_" *
+    "$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
+perambulator_charm_file(n_cnfg, i_src) = PC.parms.perambulator_charm_dir/
+    "$(PC.parms_toml["Perambulator"]["label_charm"])$(i_src)_" *
+    "$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
+sparse_modes_file(n_cnfg) = PC.parms.sparse_modes_dir/
+    "sparse_modes_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
+
+function write_correlator(n_cnfg, t₀)
+    file_path = PC.parms.result_dir/"correlators_DD_local_" *
+        "$(PC.parms_toml["Run name"]["name"])_$(PC.parms.N_modes)modes_" *
+        "n$(n_cnfg)_tsrc$(t₀).hdf5"
+    hdf5_file = HDF5.h5open(string(file_path), "w")
+
+    # Write correlators with dimension labels
+    for (iₚ, p) in enumerate(p_arr)
+        p_str = "p"*join(p, ",")
+        hdf5_file["Correlators/$p_str"] = C_tnmn̄m̄iₚ[:, :, :, :, :, iₚ]
+        HDF5.attrs(hdf5_file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels
+    end
+
+    # Write parameter file and program information
+    hdf5_file["parms.toml"] = PC.parms.parms_toml_string
+    hdf5_file["Program Information"] = PC.parms_toml["Program Information"]
+    
+    close(hdf5_file)
+
+    return
+end
+
+
 # %%#############
 # Allocate Arrays
 #################
@@ -83,40 +108,33 @@ end
 # Select valid cnfg number
 n_cnfg = PC.parms.cnfg_indices[1]
 
-# Perambulator and mode doublets arrays
+# Perambulators and sparse mode arrays
 τ_αkβlt = PC.allocate_perambulator()
 τ_charm_αkβlt = PC.allocate_perambulator()
-Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
-
-# Sparse mode arrays
 sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
 # Correlator and its labels
-correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(PC.parms.p_arr))
+correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(p_arr))
 C_tnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
-mom_dim = ndims(C_tnmn̄m̄iₚ)
 # Reversed order in Julia
 labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
 
-# Get momentum indices from mode doublets
-iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
 
+# %%#########
+# Computation
+#############
 
 function compute_contractions!(t₀)
     # Compute correlator entries
     @time "      DD_local_contracton!" begin
         PC.DD_local_contractons!(
-            C_tnmn̄m̄iₚ, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ_arr,
-            t₀, PC.parms.p_arr)
+            C_tnmn̄m̄iₚ, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ_arr, t₀, p_arr)
     end
     println()
 end
 
 
 function main()
-    # Computation
-    #############
-
     # Loop over all configurations
     for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_indices)
         # Skip the cnfgs this rank doesn't have to compute
@@ -129,9 +147,6 @@ function main()
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
-            @time "  Read mode doublets" begin
-                PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
-            end
             @time "  Read sparse modes" begin
                 PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
             end
@@ -150,11 +165,9 @@ function main()
 
                 compute_contractions!(t₀)
                 
-                # Store Correlator
+                # Write Correlator
                 @time "    Write correlator" begin
-                    name = "DD_local"
-                    PC.write_correlator(correlator_file(name, n_cnfg, t₀), C_tnmn̄m̄iₚ,
-                                        PC.parms.p_arr, mom_dim, labels)
+                    write_correlator(n_cnfg, t₀)
                 end
                 println()
             end
