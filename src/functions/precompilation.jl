@@ -10,7 +10,7 @@ PrecompileTools.@setup_workload begin
 
     parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
                   mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr,
-                  Nₜ, Nₖ, N_modes, N_cnfg, N_src, p_arr)
+                  Nₜ, Nₖ, N_modes, N_cnfg, N_src, [1], p_arr)
     
     # Pseudoscalar contraction
     N_points = 100
@@ -37,6 +37,7 @@ PrecompileTools.@setup_workload begin
     # Meson-meson correlator
     correlator_size = (parms.Nₜ, 1, 1, 1, 1, length(parms.p_arr))
     C_tnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
+    C_tnmn̄m̄ = @view C_tnmn̄m̄iₚ[:, :, :, :, 1]
 
     # Matrices in interpolstors
     Γ, Γbar = γ[5], -γ[5]
@@ -51,5 +52,9 @@ PrecompileTools.@setup_workload begin
                                             Γ, Γbar, t₀, p_arr[1])
         DD_local_contractons!(C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
                               [Γ], t₀, p_arr)
+        DD_nonlocal_contractons!(C_tnmn̄m̄, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, [Γ], t₀,
+                                 [iₚ, iₚ, iₚ, iₚ])
+        DD_mixed_contractons!(C_tnmn̄m̄iₚ, C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
+                              sparse_modes_arrays, [Γ], t₀, [iₚ, iₚ], p_arr)
     end
 end
