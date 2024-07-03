@@ -1,0 +1,34 @@
+["Run name"]
+name    = "16x8v1"
+
+["Directories and Files"]
+perambulator_dir    = "perambulator_dir"
+perambulator_charm_dir    = "perambulator_dir"
+mode_doublets_dir   = "mode_doublets_dir"
+sparse_modes_dir    = "sparse_modes_dir"
+tsrc_list   = ""
+result_dir = "results"
+
+["Geometry"]
+N_t     = 16
+N_k     = [8, 8, 8]
+
+["Configurations"]
+first   = 1
+last    = 10
+step    = 1
+
+["Sources"]
+N_src           = 2
+src_separation  = 8
+
+["Perambulator"]
+label_light      = "perambulator_light_tsrc"
+label_charm      = "perambulator_light_tsrc"
+
+["Momenta nonlocal"]
+Ptot_sq = [0]
+p_sq_sum_max = [2]
+
+["Various"]
+continuation_run = false
