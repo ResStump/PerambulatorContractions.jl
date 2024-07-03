@@ -27,7 +27,8 @@ struct Parms
     N_cnfg::Int
     N_src::Int
 
-    # Momentum
+    # Momentum indices and Momenta
+    iₚ_arr::Vector{Int}
     p_arr::Vector{Vector{Int}}
 end
 
@@ -108,19 +109,18 @@ function read_parameters()
     N_modes = size(file["perambulator"])[4]
     close(file)
 
-    # Momentuma
-    if parms_toml["Momenta"]["p"] == "all"
-        mode_doublet_file = mode_doublets_dir/
-            "mode_doublets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
-        p_arr = read_mode_doublet_momenta(mode_doublet_file)
-    else
-        p_arr = parms_toml["Momenta"]["p"]
-    end
+    # Path to a mode doublets file
+    mode_doublets_file = mode_doublets_dir/
+        "mode_doublets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
+
+    # Momenta and the corresponding indices
+    p_arr = read_mode_doublet_momenta(mode_doublets_file)
+    iₚ_arr = collect(1:length(p_arr))
 
     # Store all parameters
     global parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
                          mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_indices,
-                         tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, p_arr)
+                         tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, iₚ_arr, p_arr)
     
     return
 end
@@ -199,24 +199,6 @@ function read_mode_doublet_momenta(mode_doublets_file)
     p_arr = [collect(p) for p in eachcol(p_μiₚ)]
 
     return p_arr
-end
-
-@doc raw"""
-    momentum_indices_mode_doublets(mode_doublets_file) -> iₚ_arr
-
-For each momentum in `parms.p_arr` read the corresponding momentum index from the mode
-doublets HDF5 file `mode_doublets_file`. 
-"""
-function momentum_indices_mode_doublets(mode_doublets_file)
-    p_arr_all = read_mode_doublet_momenta(mode_doublets_file)
-
-    # Find the indices for each momentum in parms.p_arr
-    iₚ_arr = [findfirst(p_ -> p_ == p, p_arr_all) for p in parms.p_arr]
-    if any(isnothing.(iₚ_arr))
-        throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
-    end
-
-    return iₚ_arr
 end
 
 @doc raw"""
@@ -399,7 +381,7 @@ function write_correlator(correlator_file, correlator, p=nothing)
     return
 end
 
-@doc raw"""
+#= @doc raw"""
     write_correlator(correlator_file, correlator, p_arr, mom_dim, labels)
 
 Write `correlator` to the HDF5 file `correlator_file`. The data for the different momenta
@@ -426,9 +408,9 @@ function write_correlator(correlator_file, correlator, p_arr, mom_dim, labels)
     # Write correlator with dimension labels
     for (iₚ, p) in enumerate(p_arr)
         p_str = "p"*join(p, ",")
-        hdf5_file["Correlator/$p_str"] = selectdim(correlator, mom_dim, iₚ)
+        hdf5_file["Correlators/$p_str"] = selectdim(correlator, mom_dim, iₚ)
     end
-    HDF5.attributes(hdf5_file["Correlator"])["DIMENSION_LABELS"] = labels
+    HDF5.attributes(hdf5_file["Correlators"])["DIMENSION_LABELS"] = labels
 
     # Write parameter file
     hdf5_file["parms.toml"] = parms.parms_toml_string
@@ -439,7 +421,7 @@ function write_correlator(correlator_file, correlator, p_arr, mom_dim, labels)
     close(hdf5_file)
 
     return
-end
+end =#
 
 @doc raw"""
     write_sparse_modes(sparse_modes_file, sparse_modes_arrays)
