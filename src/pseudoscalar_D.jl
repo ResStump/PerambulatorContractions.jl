@@ -37,6 +37,19 @@ end
 # Set global parameters
 PC.read_parameters()
 
+# Set which momenta should be used
+if PC.parms_toml["Momenta"]["p"] == "all"
+    p_arr = PC.parms.p_arr
+else
+    p_arr = PC.parms_toml["Momenta"]["p"]
+end
+
+# Momentum indices in mode doublets corresponding to the momentas in p_arr
+iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
+if any(isnothing.(iₚ_arr))
+    throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
+end
+
 
 # File paths
 perambulator_file(n_cnfg, i_src) = PC.parms.perambulator_dir/
@@ -67,10 +80,10 @@ function correlator_file(name, p; tmp=false)
     return file
 end
 
-correlator_file_arr = [correlator_file("pseudoscalar_D", p) for p in PC.parms.p_arr]
+correlator_file_arr = [correlator_file("pseudoscalar_D", p) for p in p_arr]
 
 correlator_file_tmp_arr = [correlator_file("pseudoscalar_D", p, tmp=true)
-                            for p in PC.parms.p_arr]
+                            for p in p_arr]
 
 # Use sparse modes?
 if PC.parms_toml["Correlator"]["method"] == "sparse"
@@ -111,17 +124,14 @@ if continuation_run
     correlators = PC.read_correlator.(correlator_file_tmp_arr)
 else
     correlator_size = PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg
-    correlators = [Array{ComplexF64}(undef, correlator_size) for p in PC.parms.p_arr]
+    correlators = [Array{ComplexF64}(undef, correlator_size) for p in p_arr]
 end
-
-# Get momentum indices from mode doublets
-iₚ_arr = PC.momentum_indices_mode_doublets(mode_doublets_file(n_cnfg))
 
 
 
 function compute_contractions!(i_cnfg, i_src, t₀)
     # Loop over all momenta
-    for (i_p, p) in enumerate(PC.parms.p_arr)
+    for (i_p, p) in enumerate(p_arr)
         println("    Momentum p = $p")
         iₚ = iₚ_arr[i_p]
 
@@ -189,7 +199,7 @@ function main()
 
             # Temporary store correlators and update finished_cnfgs
             @time "  Write tmp Files" begin
-                PC.write_correlator.(correlator_file_tmp_arr, correlators, PC.parms.p_arr)
+                PC.write_correlator.(correlator_file_tmp_arr, correlators, p_arr)
 
                 push!(finished_cnfgs, n_cnfg)
                 DF.writedlm(string(finished_cnfgs_file), finished_cnfgs, '\n')
@@ -212,7 +222,7 @@ function main()
 
     if myrank == 0
         @time "Write correlators" begin
-            PC.write_correlator.(correlator_file_arr, correlators, PC.parms.p_arr)
+            PC.write_correlator.(correlator_file_arr, correlators, p_arr)
         end
     end
 
