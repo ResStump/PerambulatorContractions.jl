@@ -44,7 +44,7 @@ else
     p_arr = PC.parms_toml["Momenta"]["p"]
 end
 
-# Momentum indices in mode doublets corresponding to the momentas in p_arr
+# Get momentum indices in mode doublets corresponding to the momentas in p_arr
 iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
 if any(isnothing.(iₚ_arr))
     throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
