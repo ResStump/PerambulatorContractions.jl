@@ -56,5 +56,7 @@ PrecompileTools.@setup_workload begin
                                  [iₚ, iₚ, iₚ, iₚ])
         DD_mixed_contractons!(C_tnmn̄m̄iₚ, C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
                               sparse_modes_arrays, [Γ], t₀, [iₚ, iₚ], p_arr)
+        dad_local_contractons!(C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
+                              [Γ], t₀, p_arr)
     end
 end
