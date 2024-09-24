@@ -58,6 +58,7 @@ function read_parameters()
 
     # Add information about program to `parms_toml` (as string)
     parms_toml["Program Information"] =
+        "Date = $(Dates.now())\n"*
         "Julia version = $VERSION\n"*
         "$(@__MODULE__) version = $(pkgversion(@__MODULE__))\n"*
         "Program file = $PROGRAM_FILE\n"
