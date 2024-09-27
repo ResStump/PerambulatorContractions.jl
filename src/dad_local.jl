@@ -51,8 +51,10 @@ if any(isnothing.(iₚ_arr))
 end
 
 # Array of (monomial of) γ-matrices
-Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3]]
-Nᵧ = length(Γ_arr)
+Γ₁_arr = [PC.γ[1], PC.γ[2], PC.γ[3]]
+Γ₂_arr = [PC.γ[5]]
+Nᵧ_1 = length(Γ₁_arr)
+Nᵧ_2 = length(Γ₂_arr)
 
 # Continuation run?
 finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
@@ -87,7 +89,7 @@ function write_correlator(n_cnfg, t₀)
     # Write correlators with dimension labels
     for (iₚ, p) in enumerate(p_arr)
         p_str = "p"*join(p, ",")
-        hdf5_file["Correlators/$p_str"] = C_tnmn̄m̄iₚ[:, :, :, :, :, iₚ]
+        hdf5_file["Correlators/$p_str"] = C_tnmiₚ[:, :, :, iₚ]
         HDF5.attrs(hdf5_file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels
     end
 
@@ -114,10 +116,10 @@ n_cnfg = PC.parms.cnfg_indices[1]
 sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
 # Correlator and its labels
-correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(p_arr))
-C_tnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
+correlator_size = (PC.parms.Nₜ, Nᵧ_1, Nᵧ_2, length(p_arr))
+C_tnmiₚ = Array{ComplexF64}(undef, correlator_size)
 # Reversed order in Julia
-labels = ["Gamma2 bar C", "Gamma1 bar C", "Gamma2", "Gamma1", "t"]
+labels = ["Gamma2", "Gamma1", "t"]
 
 
 # %%#########
@@ -128,7 +130,8 @@ function compute_contractions!(t₀)
     # Compute correlator entries
     @time "      dad_local_contractons!" begin
         PC.dad_local_contractons!(
-            C_tnmn̄m̄iₚ, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ_arr, t₀, p_arr)
+            C_tnmiₚ, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ₁_arr, Γ₂_arr, t₀, p_arr
+        )
     end
     println()
 end
