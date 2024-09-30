@@ -332,7 +332,7 @@ function DD_mixed_contractons!(
         Φ_kl_tp₂ = @view Φ_kltiₚ[:, :, iₜ, Iₚ_nonlocal[2]]
 
         # Contract mode doublet and charm perambulator
-        TO.@tensoropt (k, k', l) begin
+        TO.@tensoropt (k, k', l, l') begin
             # For nonlocal-local correlator
             Φτ_charm_kαβl_tp₁[k, α, β, l] := Φ_kl_tp₁[k, k'] * τ_charm_αkβl_t[α, k', β, l]
             Φτ_charm_kαβl_tp₂[k, α, β, l] := Φ_kl_tp₂[k, k'] * τ_charm_αkβl_t[α, k', β, l]
