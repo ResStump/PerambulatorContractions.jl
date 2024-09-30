@@ -117,7 +117,6 @@ function DD_dad_nonlocal_local_mixed_contractons!(
             end
 
             # Positive part
-            # C1[α', β', α, β_, b, e]
             TO.@tensoropt begin
                 C_pos_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
                     Γₙₗ_αβn[α, α', n] * C1[α', β', α, β_, b, e] *
@@ -227,17 +226,17 @@ function DD_dad_nonlocal_local_mixed_contractons!(
             end
             @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old =#
 
-            # Positive part
+            # Negative part
             TO.@tensoropt begin
                 C_neg_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
-                    C1[α', β', α_, β, c, d] * CΓₗ₁_αβn[α, α', n] *
-                    Γbarₙₗ_αβn[β', β, n̄] * C2[α_', β_', α, β_, b, e] *
+                    C1[α', β', α_, β, b, d] * CΓₗ₁_αβn[α', α, n] *
+                    Γbarₙₗ_αβn[β', β, n̄] * C2[α_', β_', α, β_, c, e] *
                     CΓₗ₂_αβn[α_, α_', m] * Γbarₙₗ_αβn[β_, β_', m̄]
             end
             #= TO.@tensoropt (l, k, l', k', l̃, k̃, l̃', k̃') begin
                 C_neg_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
-                    v_sink_ck_iₓ′t[b, k] * v_sink_ck_iₓ′t[c, k'] *
-                    CΓₗ₁_αβn[α, α', n] * τ_charm_αkβl_t[α', k', β', l'] *
+                    v_sink_ck_iₓ′t[c, k] * v_sink_ck_iₓ′t[b, k'] *
+                    CΓₗ₁_αβn[α', α, n] * τ_charm_αkβl_t[α', k', β', l'] *
                     conj(Φ_kl_t₀p₁)[l, l'] * Γbarₙₗ_αβn[β', β, n̄] *
                     τ_bw_light_kαβl_t[l, β, α_, k̃] *
                     conj(v_sink_ck_iₓ′t)[d, k̃] * conj(v_sink_ck_iₓ′t)[e, k̃'] *
