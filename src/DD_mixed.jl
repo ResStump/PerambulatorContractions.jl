@@ -72,21 +72,6 @@ for (Ptot_sq, p_sq_sum_max) in zip(Ptot_sq_arr, p_sq_sum_max_arr)
 end
 
 
-# %%########################
-# Momenta for Local Operator
-############################
-
-# The momenta for the local operator are the total momenta
-p_local_arr = Ptot_arr
-
-# Get momentum indices in mode doublets corresponding to the momentas in p_local_arr
-iₚ_local_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_local_arr]
-if any(isnothing.(iₚ_local_arr))
-    throw(DomainError("a chosen momentum `p` for the local operator is not contained in " *
-                      "the mode doublets."))
-end
-
-
 # %%############
 # File Functions
 ################
@@ -111,27 +96,25 @@ function write_correlator(n_cnfg, t₀)
 
     # Loop over all momentum index pairs for the nonlocal operator
     for (iₚ_nonlocal, Iₚ_nonlocal) in enumerate(Iₚ_nonlocal_arr)
-        for (iₚ_local, Ptot) in enumerate(p_local_arr)
-            # Get momenta
-            p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
-            @assert Ptot == p₁ + p₂
+        # Get momenta
+        p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
+        Ptot = p₁ + p₂
 
-            # Paths to groups in hdf5 file
-            Ptot_str = join(Ptot, ",")
-            p₁_str = join(p₁, ",")
-            group_nloc_loc =
-                "Correlators/Ptot$(Ptot_str)/p_nonlocal1_$(p₁_str)/nonlocal-local"
-            group_loc_nloc =
-                "Correlators/Ptot$(Ptot_str)/p_nonlocal1_$(p₁_str)/local-nonlocal"
+        # Paths to groups in hdf5 file
+        Ptot_str = join(Ptot, ",")
+        p₁_str = join(p₁, ",")
+        group_nloc_loc =
+            "Correlators/Ptot$(Ptot_str)/p_nonlocal1_$(p₁_str)/nonlocal-local"
+        group_loc_nloc =
+            "Correlators/Ptot$(Ptot_str)/p_nonlocal1_$(p₁_str)/local-nonlocal"
 
-            # Write correlators with dimension labels
-            hdf5_file[group_nloc_loc] = 
-                C_nonlocal_local_tnmn̄m̄iₚIₚ[:, :, :, :, :, iₚ_local, iₚ_nonlocal]
-            HDF5.attrs(hdf5_file[group_nloc_loc])["DIMENSION_LABELS"] = labels
-            hdf5_file[group_loc_nloc] = 
-                C_local_nonlocal_tnmn̄m̄iₚIₚ[:, :, :, :, :, iₚ_local, iₚ_nonlocal]
-            HDF5.attrs(hdf5_file[group_loc_nloc])["DIMENSION_LABELS"] = labels
-        end
+        # Write correlators with dimension labels
+        hdf5_file[group_nloc_loc] = 
+            C_nonlocal_local_tnmn̄m̄iₚIₚ[:, :, :, :, :, 1, iₚ_nonlocal]
+        HDF5.attrs(hdf5_file[group_nloc_loc])["DIMENSION_LABELS"] = labels
+        hdf5_file[group_loc_nloc] = 
+            C_local_nonlocal_tnmn̄m̄iₚIₚ[:, :, :, :, :, 1, iₚ_nonlocal]
+        HDF5.attrs(hdf5_file[group_loc_nloc])["DIMENSION_LABELS"] = labels
     end
 
     # Write parameter file and program information
@@ -158,7 +141,8 @@ n_cnfg = PC.parms.cnfg_indices[1]
 sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
 # Correlator and its labels
-correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(p_local_arr), length(Iₚ_nonlocal_arr))
+# (for momentum of local operator always choose Ptot -> index always iₚ=1)
+correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, 1, length(Iₚ_nonlocal_arr))
 C_nonlocal_local_tnmn̄m̄iₚIₚ = Array{ComplexF64}(undef, correlator_size)
 C_local_nonlocal_tnmn̄m̄iₚIₚ = Array{ComplexF64}(undef, correlator_size)
 # Reversed order in Julia
@@ -172,7 +156,9 @@ labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
 function compute_contractions!(t₀)
     # Loop over all momentum index combinations
     for (iₚ_nonlocal, Iₚ_nonlocal) in enumerate(Iₚ_nonlocal_arr)
-        println("    Momenta for nonlocal operator: $(PC.parms.p_arr[Iₚ_nonlocal])")
+        p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
+        Ptot = p₁ + p₂
+        println("    Momenta for nonlocal operator: $p₁, $p₂")
         
         @time "      DD mixed contractons" begin
             # Contraction for correlator of form 
@@ -184,7 +170,7 @@ function compute_contractions!(t₀)
             PC.DD_mixed_contractons!(
                 C_nonlocal_local_tnmn̄m̄iₚ_Iₚ, C_local_nonlocal_tnmn̄m̄iₚ_Iₚ,
                 τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ, sparse_modes_arrays, Γ_arr, t₀,
-                Iₚ_nonlocal, p_local_arr
+                Iₚ_nonlocal, [Ptot]
             )
         end
         println()

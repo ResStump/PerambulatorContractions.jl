@@ -126,10 +126,10 @@ Compute an array of momentum indices pairs for which the two momenta (p₁, p₂
 following two properties:
 - (p₁ + p₂)² = `Ptot_sq`
 - p₁² + p₂² ≤ `p_sq_sum`
-- If (p₂, p₁) is already in the array, then (p₁, p₂) is not added (if p₁ ≠ p₂)
+- If (p₂, p₁) is already in the array, then (p₁, p₂) is not added (relevant for p₁ ≠ p₂)
 - p₁ = p₂ is allowed
 
-The available momentum indeces and the corresponding momenta are taken from `parms`.
+The available momentum indices and the corresponding momenta are taken from `parms`.
 
 If `ret_Ptot=true` the array of total momenta is also returned.
 """
@@ -155,6 +155,59 @@ function generate_momentum_pairs(Ptot_sq, p_sq_sum_max; ret_Ptot=false)
             if p₁'*p₁ + p₂'*p₂ <= p_sq_sum_max && p₁ + p₂ == Ptot
                 push!(Iₚ_arr, [iₚ₁, iₚ₂])
             end
+        end
+    end
+
+    if ret_Ptot
+        return Iₚ_arr, Ptot_arr
+    else
+        return Iₚ_arr
+    end
+end
+
+@doc raw"""
+    generate_momentum_4tuples(Ptot_sq, p_sq_sum_max; ret_Ptot=false)
+
+Compute an array of momentum indices 4-tuples for which the four momenta (p₁, p₂, p₃, p₄)
+fulfil the following properties:
+- (p₁ + p₂)² = (p₃ + p₄)² = `Ptot_sq`
+- p₁² + p₂² ≤ `p_sq_sum` and p₃² + p₄² ≤ `p_sq_sum`
+- If (p₂, p₁) is already in the array, then (p₁, p₂) is not added (relevant for p₁ ≠ p₂) \
+  (the same for (p₃, p₄))
+- p₁ = p₂ or p₃ = p₄ is allowed
+
+The available momentum indices and the corresponding momenta are taken from `parms`.
+
+If `ret_Ptot=true` the array of total momenta is also returned.
+"""
+function generate_momentum_4tuples(Ptot_sq, p_sq_sum_max; ret_Ptot=false)
+    # Compute all total momenta with P² = Ptot_sq
+    Ptot_arr = []
+    Pᵢ_max = round(Int, √Ptot_sq)
+    for (Px, Py, Pz) in Iterators.product(-Pᵢ_max:Pᵢ_max, -Pᵢ_max:Pᵢ_max, -Pᵢ_max:Pᵢ_max)
+        P = [Px, Py, Pz]
+        if P'*P == Ptot_sq
+            push!(Ptot_arr, P)
+        end
+    end
+
+    # Compute all valid 4-tuple of momenta and store their indices
+    Iₚ_arr = []
+    for Ptot in Ptot_arr
+        # Loop over all combinations of two momentum indeces
+        # (twice the same momentum is allowed) 
+        Iₚ_pair_arr = []
+        for (iₚ₁, iₚ₂) in Comb.with_replacement_combinations(parms.iₚ_arr, 2)
+            p₁, p₂ = parms.p_arr[[iₚ₁, iₚ₂]]
+            # Only use momenta p₁, p₂ if p₁² + p₂² small enough and tot. momentum is correct
+            if p₁'*p₁ + p₂'*p₂ <= p_sq_sum_max && p₁ + p₂ == Ptot
+                push!(Iₚ_pair_arr, [iₚ₁, iₚ₂])
+            end
+        end
+
+        # Get all combinations of pairs
+        for (Iₚ_pair_1, Iₚ_pair_2) in Iterators.product(Iₚ_pair_arr, Iₚ_pair_arr)
+            push!(Iₚ_arr, [Iₚ_pair_1..., Iₚ_pair_2...])
         end
     end
 
