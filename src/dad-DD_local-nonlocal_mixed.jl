@@ -1,7 +1,7 @@
 # %%########################################################################################
 # dad-DD_local-nonlocal_mixed.jl
 #
-# Compute mixed local-nonlocal DD-diquark-antidiquark correlators from perambulators, mode
+# Compute mixed local-nonlocal diquark-antidiquark-DD correlators from perambulators, mode
 # doublets and sparse modes.
 #
 # Usage:
