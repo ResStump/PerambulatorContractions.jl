@@ -302,7 +302,7 @@ function DD_mixed_contractons!(
     # Convert momentum array to contiguous array
     p_local_μiₚ = stack(p_local_arr)
 
-    # Set correlator C_tnmn̄m̄iₚ to zero and permute such that time is slowest changing index
+    # Set correlators to zero and permute such that time is slowest changing index
     Cₙₗ_tnmn̄m̄iₚ .= 0
     Cₗₙ_tnmn̄m̄iₚ .= 0
     Cₙₗ_nmn̄m̄iₚt = permutedims(Cₙₗ_tnmn̄m̄iₚ, [2, 3, 4, 5, 6, 1])

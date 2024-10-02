@@ -33,7 +33,7 @@ function dad_local_contractons!(
     # Number of points on spares lattice
     N_points = size(x_sink_μiₓt, 2)
 
-    # Number of colors (probly not nececssary)
+    # Number of colors (could probably just use 3)
     N_c = size(v_sink_ciₓkt, 1)
 
     # Number of gamma matrices
