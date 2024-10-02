@@ -64,14 +64,16 @@ p_sq_sum_max_arr = PC.parms_toml["Momenta"]["p_sq_sum_max"]
 # Compute all combinations of the momentum indeces at sink and source
 Iₚ_arr = []
 for (Ptot_sq, p_sq_sum_max) in zip(Ptot_sq_arr, p_sq_sum_max_arr)
-    # Pairs of momenta
-    Iₚ_pair_arr = PC.generate_momentum_pairs(Ptot_sq, p_sq_sum_max)
-
-    # All combinations of sink and source momentum pairs
-    for (Iₚ_pair_1, Iₚ_pair_2) in Iterators.product(Iₚ_pair_arr, Iₚ_pair_arr)
-        push!(Iₚ_arr, [Iₚ_pair_1..., Iₚ_pair_2...])
-    end
+    # 4-tuple of momenta
+    Iₚ_arr_ = PC.generate_momentum_4tuples(Ptot_sq, p_sq_sum_max)
+    append!(Iₚ_arr, Iₚ_arr_)
 end
+
+#= if PC.parms_toml["Correlator"]["method"] == "sparse"
+    # Get list of momentum indices that are actually used and the corresponding momenta
+    Iₚ_used_arr = collect(Set(stack(Iₚ_arr)))
+    p_used_arr = PC.parms.p_arr[Iₚ_used_arr]
+end =#
 
 
 # %%############
