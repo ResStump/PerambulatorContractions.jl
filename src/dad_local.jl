@@ -49,6 +49,8 @@ end
 Γ₂_arr = [PC.γ[5]]
 Nᵧ_1 = length(Γ₁_arr)
 Nᵧ_2 = length(Γ₂_arr)
+Γ₁_dad_labels = ["Cgamma_1", "Cgamma_2", "Cgamma_3"]
+Γ₂_dad_labels = ["Cgamma_5"]
 
 # Continuation run?
 finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
@@ -86,6 +88,10 @@ function write_correlator(n_cnfg, t₀)
         hdf5_file["Correlators/$p_str"] = C_tnmiₚ[:, :, :, iₚ]
         HDF5.attrs(hdf5_file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels
     end
+
+    # Write spin structure
+    hdf5_file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
+    hdf5_file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
 
     # Write parameter file and program information
     hdf5_file["parms.toml"] = PC.parms.parms_toml_string

@@ -45,14 +45,18 @@ else
     p_arr = PC.parms_toml["Momenta"]["p"]
 end
 
-# Array of (monomial of) γ-matrices for the diquark-antidiquark operators
+# Array of (monomial of) γ-matrices and their labels
+# for the DD operators
+Γ_DD_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
+Nᵧ_DD = length(Γ_DD_arr)
+Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "-i1"]
+# and for the dad operators
 Γ₁_dad_arr = [PC.γ[1], PC.γ[2], PC.γ[3]]
 Γ₂_dad_arr = [PC.γ[5]]
 Nᵧ_1_dad = length(Γ₁_dad_arr)
 Nᵧ_2_dad = length(Γ₂_dad_arr)
-# and for the DD operators
-Γ_DD_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
-Nᵧ_DD = length(Γ_DD_arr)
+Γ₁_dad_labels = ["Cgamma_1", "Cgamma_2", "Cgamma_3"]
+Γ₂_dad_labels = ["Cgamma_5"]
 
 
 # Continuation run?
@@ -93,6 +97,12 @@ function write_correlator(n_cnfg, t₀)
         hdf5_file["Correlators/$p_str/dad-DD"] = C_dad_DD_tnmn̄m̄iₚ[:, :, :, :, :, iₚ]
         HDF5.attrs(hdf5_file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels_dad_DD
     end
+
+    # Write spin structure
+    hdf5_file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
+    hdf5_file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
+    hdf5_file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
+    hdf5_file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
 
     # Write parameter file and program information
     hdf5_file["parms.toml"] = PC.parms.parms_toml_string

@@ -38,9 +38,10 @@ end
 # Set global parameters
 PC.read_parameters()
 
-# Array of (monomial of) γ-matrices
+# Array of (monomial of) γ-matrices and their labels
 Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
 Nᵧ = length(Γ_arr)
+Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "-i1"]
 
 # Continuation run?
 finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
@@ -116,6 +117,10 @@ function write_correlator(n_cnfg, t₀)
             C_local_nonlocal_tnmn̄m̄iₚIₚ[:, :, :, :, :, 1, iₚ_nonlocal]
         HDF5.attrs(hdf5_file[group_loc_nloc])["DIMENSION_LABELS"] = labels
     end
+
+    # Write spin structure
+    hdf5_file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
+    hdf5_file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
 
     # Write parameter file and program information
     hdf5_file["parms.toml"] = PC.parms.parms_toml_string
