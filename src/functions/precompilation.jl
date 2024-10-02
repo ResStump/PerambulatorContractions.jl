@@ -39,6 +39,9 @@ PrecompileTools.@setup_workload begin
     C_tnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
     C_tnmn̄m̄ = @view C_tnmn̄m̄iₚ[:, :, :, :, 1]
 
+    # Correlator with only two gamma matrix indices
+    C_tnmiₚ = Array{ComplexF64}(undef, parms.Nₜ, 1, 1, length(parms.p_arr))
+
     # Matrices in interpolstors
     Γ, Γbar = γ[5], -γ[5]
 
@@ -56,7 +59,12 @@ PrecompileTools.@setup_workload begin
                                  [iₚ, iₚ, iₚ, iₚ])
         DD_mixed_contractons!(C_tnmn̄m̄iₚ, C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
                               sparse_modes_arrays, [Γ], t₀, [iₚ, iₚ], p_arr)
-        dad_local_contractons!(C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
-                              [Γ], t₀, p_arr)
+        dad_local_contractons!(C_tnmiₚ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays,
+                              [Γ], [Γ], t₀, p_arr)
+        DD_dad_nonlocal_local_mixed_contractons!(C_tnmn̄m̄iₚ, C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt,
+                                                 Φ_kltiₚ, sparse_modes_arrays,
+                                                 [Γ], [Γ], [Γ], t₀, [iₚ, iₚ], p_arr)
+        DD_dad_local_mixed_contractons!(C_tnmn̄m̄iₚ, C_tnmn̄m̄iₚ, τ_αkβlt, τ_αkβlt,
+                                        sparse_modes_arrays, [Γ], [Γ], [Γ], t₀, p_arr)
     end
 end
