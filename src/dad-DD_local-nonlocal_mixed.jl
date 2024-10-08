@@ -160,14 +160,14 @@ sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 # Correlators and its labels
 C_nonlocal_local_tnmn̄m̄iₚIₚ = Array{ComplexF64}(
     undef,
-    PC.parms.Nₜ, Nᵧ_nonlocal, Nᵧ_nonlocal, Nᵧ_1_local, Nᵧ_2_local, 1, length(Iₚ_nonlocal_arr)
+    PC.parms.Nₜ, Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, 1, length(Iₚ_nonlocal_arr)
 )
 C_local_nonlocal_tnmn̄m̄iₚIₚ = Array{ComplexF64}(
     undef,
-    PC.parms.Nₜ, Nᵧ_1_local, Nᵧ_2_local, Nᵧ_nonlocal, Nᵧ_nonlocal, 1, length(Iₚ_nonlocal_arr)
+    PC.parms.Nₜ, Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, 1, length(Iₚ_nonlocal_arr)
 )
 # Reversed order in Julia
-labels_nonlocal_local = ["Gamma2 bar C", "Gamma1 bar C", "Gamma2", "Gamma1", "t"]
+labels_nonlocal_local = ["CGamma2 barC", "CGamma1 barC", "CGamma2", "CGamma1", "t"]
 labels_local_nonlocal = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
 
 
@@ -192,7 +192,7 @@ function compute_contractions!(t₀)
             PC.DD_dad_nonlocal_local_mixed_contractons!(
                 C_nonlocal_local_tnmn̄m̄iₚ_Iₚ, C_local_nonlocal_tnmn̄m̄iₚ_Iₚ,
                 τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ, sparse_modes_arrays,
-                Γ₁_local_arr, Γ₂_local_arr, Γ_nonlocal_arr, t₀,
+                Γ₁_dad_arr, Γ₂_dad_arr, Γ_DD_arr, t₀,
                 Iₚ_nonlocal, [Ptot]
             )
         end
