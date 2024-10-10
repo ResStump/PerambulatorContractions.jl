@@ -80,24 +80,24 @@ function write_correlator(n_cnfg, t₀)
     file_path = PC.parms.result_dir/"correlators_dad_local_" *
         "$(PC.parms_toml["Run name"]["name"])_$(PC.parms.N_modes)modes_" *
         "n$(n_cnfg)_tsrc$(t₀).hdf5"
-    hdf5_file = HDF5.h5open(string(file_path), "w")
+    file = HDF5.h5open(string(file_path), "w")
 
     # Write correlators with dimension labels
     for (iₚ, p) in enumerate(p_arr)
         p_str = "p"*join(p, ",")
-        hdf5_file["Correlators/$p_str"] = C_tnmiₚ[:, :, :, iₚ]
-        HDF5.attrs(hdf5_file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels
+        file["Correlators/$p_str"] = C_tnmiₚ[:, :, :, iₚ]
+        HDF5.attrs(file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels
     end
 
     # Write spin structure
-    hdf5_file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
-    hdf5_file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
+    file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
+    file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
 
     # Write parameter file and program information
-    hdf5_file["parms.toml"] = PC.parms.parms_toml_string
-    hdf5_file["Program Information"] = PC.parms_toml["Program Information"]
+    file["parms.toml"] = PC.parms.parms_toml_string
+    file["Program Information"] = PC.parms_toml["Program Information"]
     
-    close(hdf5_file)
+    close(file)
 
     return
 end

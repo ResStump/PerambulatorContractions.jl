@@ -40,9 +40,9 @@ The number of points in the sparse modes are either determined from the HDF5 fil
 function allocate_sparse_modes(sparse_modes_file=nothing; N_points=nothing)
     if !isnothing(sparse_modes_file)
         # If sparse_modes_file given get number of points in sparse space from it
-        hdf5_file = HDF5.h5open(string(sparse_modes_file), "r")
-        _, N_points, _ = size(hdf5_file["sparse_space_src"])
-        close(hdf5_file)
+        file = HDF5.h5open(string(sparse_modes_file), "r")
+        _, N_points, _ = size(file["sparse_space_src"])
+        close(file)
     elseif isnothing(N_points)
         throw(ArgumentError("either sparse_modes_file or N_points have to be given."))
     end

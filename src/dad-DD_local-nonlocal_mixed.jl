@@ -101,7 +101,7 @@ function write_correlator(n_cnfg, t₀)
     file_path = PC.parms.result_dir/"correlators_dad-DD_local-nonlocal_mixed_" *
         "$(PC.parms_toml["Run name"]["name"])_$(PC.parms.N_modes)modes_" *
         "n$(n_cnfg)_tsrc$(t₀).hdf5"
-    hdf5_file = HDF5.h5open(string(file_path), "w")
+    file = HDF5.h5open(string(file_path), "w")
 
     # Loop over all momentum index pairs for the nonlocal operator
     for (iₚ_nonlocal, Iₚ_nonlocal) in enumerate(Iₚ_nonlocal_arr)
@@ -118,27 +118,27 @@ function write_correlator(n_cnfg, t₀)
             "Correlators/Ptot$(Ptot_str)/p_nonlocal1_$(p₁_str)/local-nonlocal"
 
         # Write correlators with dimension labels
-        hdf5_file[group_nloc_loc] = 
+        file[group_nloc_loc] = 
             C_nonlocal_local_tnmn̄m̄iₚIₚ[:, :, :, :, :, 1, iₚ_nonlocal]
-        HDF5.attrs(hdf5_file[group_nloc_loc])["DIMENSION_LABELS"] = 
+        HDF5.attrs(file[group_nloc_loc])["DIMENSION_LABELS"] = 
             labels_nonlocal_local
-        hdf5_file[group_loc_nloc] = 
+        file[group_loc_nloc] = 
             C_local_nonlocal_tnmn̄m̄iₚIₚ[:, :, :, :, :, 1, iₚ_nonlocal]
-        HDF5.attrs(hdf5_file[group_loc_nloc])["DIMENSION_LABELS"] = 
+        HDF5.attrs(file[group_loc_nloc])["DIMENSION_LABELS"] = 
             labels_local_nonlocal
     end
 
     # Write spin structure
-    hdf5_file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
-    hdf5_file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
-    hdf5_file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
-    hdf5_file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
+    file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
+    file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
+    file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
+    file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
 
     # Write parameter file and program information
-    hdf5_file["parms.toml"] = PC.parms.parms_toml_string
-    hdf5_file["Program Information"] = PC.parms_toml["Program Information"]
+    file["parms.toml"] = PC.parms.parms_toml_string
+    file["Program Information"] = PC.parms_toml["Program Information"]
 
-    close(hdf5_file)
+    close(file)
 
     return
 end

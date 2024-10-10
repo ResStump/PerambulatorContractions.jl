@@ -95,7 +95,7 @@ function write_correlator(n_cnfg, t₀)
     file_path = PC.parms.result_dir/"correlators_DD_nonlocal_" *
         "$(PC.parms_toml["Run name"]["name"])_$(PC.parms.N_modes)modes_" *
         "n$(n_cnfg)_tsrc$(t₀).hdf5"
-    hdf5_file = HDF5.h5open(string(file_path), "w")
+    file = HDF5.h5open(string(file_path), "w")
 
     # Loop over all momentum index combinations
     for (i_p, Iₚ) in enumerate(Iₚ_arr)
@@ -112,23 +112,23 @@ function write_correlator(n_cnfg, t₀)
             "psrc1_$(p₃_str)/ubar_c_dbar_c-cbar_d_cbar_u"
 
         # Write correlators with dimension labels
-        hdf5_file[group_ūcd̄c_c̄uc̄d] = 
+        file[group_ūcd̄c_c̄uc̄d] = 
             C_ūcd̄c_c̄uc̄d_tnmn̄m̄Iₚ[:, :, :, :, :, i_p]
-        HDF5.attrs(hdf5_file[group_ūcd̄c_c̄uc̄d])["DIMENSION_LABELS"] = labels
-        hdf5_file[group_ūcd̄c_c̄dc̄u] = 
+        HDF5.attrs(file[group_ūcd̄c_c̄uc̄d])["DIMENSION_LABELS"] = labels
+        file[group_ūcd̄c_c̄dc̄u] = 
             C_ūcd̄c_c̄dc̄u_tnmn̄m̄Iₚ[:, :, :, :, :, i_p]
-        HDF5.attrs(hdf5_file[group_ūcd̄c_c̄dc̄u])["DIMENSION_LABELS"] = labels
+        HDF5.attrs(file[group_ūcd̄c_c̄dc̄u])["DIMENSION_LABELS"] = labels
     end
 
     # Write spin structure
-    hdf5_file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
-    hdf5_file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
+    file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
+    file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
 
     # Write parameter file and program information
-    hdf5_file["parms.toml"] = PC.parms.parms_toml_string
-    hdf5_file["Program Information"] = PC.parms_toml["Program Information"]
+    file["parms.toml"] = PC.parms.parms_toml_string
+    file["Program Information"] = PC.parms_toml["Program Information"]
 
-    close(hdf5_file)
+    close(file)
 
     return
 end

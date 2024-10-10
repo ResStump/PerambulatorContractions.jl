@@ -155,9 +155,9 @@ function read_perambulator!(perambulator_file, τ_αkβlt)
     end
     
     # Read perambulator and set noise index to 1 (since noise is `ones`)
-    hdf5_file = HDF5.h5open(string(perambulator_file), "r")
-    τ_αkβlt[:] = hdf5_file["perambulator"][:,:,:,:,:,1]
-    close(hdf5_file)
+    file = HDF5.h5open(string(perambulator_file), "r")
+    τ_αkβlt[:] = file["perambulator"][:,:,:,:,:,1]
+    close(file)
 
     return 
 end
@@ -192,9 +192,9 @@ Read the mode doublets HDF5 file `mode_doublets_file` and return the momenta `p_
 """
 function read_mode_doublet_momenta(mode_doublets_file)
     # Read momenta from and transpose them such that the p_arr[iₚ, :] is the iₚ'th momentum
-    hdf5_file = HDF5.h5open(string(mode_doublets_file), "r")
-    p_μiₚ = read(hdf5_file["axes"]["momenta"])
-    close(hdf5_file)
+    file = HDF5.h5open(string(mode_doublets_file), "r")
+    p_μiₚ = read(file["axes"]["momenta"])
+    close(file)
 
     # Convert to vector of vectors
     p_arr = [collect(p) for p in eachcol(p_μiₚ)]
@@ -228,9 +228,9 @@ function read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
     end
 
     # Read mode doublets and set the derivative index to 1 (no derivative)
-    hdf5_file = HDF5.h5open(string(mode_doublets_file), "r")
-    Φ_tmp_kltiₚ = read(hdf5_file["mode_doublets"])[1,:,:,:,:]
-    close(hdf5_file)
+    file = HDF5.h5open(string(mode_doublets_file), "r")
+    Φ_tmp_kltiₚ = read(file["mode_doublets"])[1,:,:,:,:]
+    close(file)
 
     # Permute dimensions to match index convention of perambulator
     permutedims!(Φ_kltiₚ, Φ_tmp_kltiₚ, (2, 1, 3, 4))
@@ -305,12 +305,12 @@ function read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
         throw(DimensionMismatch("dimensions of time axis don't match."))
     end
 
-    hdf5_file = HDF5.h5open(string(sparse_modes_file), "r")
-    x_sink_μiₓt[:] = read(hdf5_file["sparse_space_sink"])
-    x_src_μiₓt[:] = read(hdf5_file["sparse_space_src"])
-    v_sink_ciₓkt[:] = read(hdf5_file["sparse_modes_sink"])
-    v_src_ciₓkt[:] = read(hdf5_file["sparse_modes_src"])
-    close(hdf5_file)
+    file = HDF5.h5open(string(sparse_modes_file), "r")
+    x_sink_μiₓt[:] = read(file["sparse_space_sink"])
+    x_src_μiₓt[:] = read(file["sparse_space_src"])
+    v_sink_ciₓkt[:] = read(file["sparse_modes_sink"])
+    v_src_ciₓkt[:] = read(file["sparse_modes_src"])
+    close(file)
 
     return
 end
@@ -360,24 +360,24 @@ Additionally, also write the parameter file `parms_toml_string` and program info
 to it.
 """
 function write_correlator(correlator_file, correlator, p=nothing)
-    hdf5_file = HDF5.h5open(string(correlator_file), "w")
+    file = HDF5.h5open(string(correlator_file), "w")
 
     # Write correlator with dimension labels
-    hdf5_file["Correlator"] = correlator
-    HDF5.attributes(hdf5_file["Correlator"])["DIMENSION_LABELS"] = ["t", "source", "cnfg"]
+    file["Correlator"] = correlator
+    HDF5.attributes(file["Correlator"])["DIMENSION_LABELS"] = ["t", "source", "cnfg"]
 
     # Write momentum
     if !isnothing(p)
-        hdf5_file["momentum"] = p
+        file["momentum"] = p
     end
 
     # Write parameter file
-    hdf5_file["parms.toml"] = parms.parms_toml_string
+    file["parms.toml"] = parms.parms_toml_string
 
     # Write program information
-    hdf5_file["Program Information"] = parms_toml["Program Information"]
+    file["Program Information"] = parms_toml["Program Information"]
     
-    close(hdf5_file)
+    close(file)
 
     return
 end
@@ -404,22 +404,22 @@ function write_correlator(correlator_file, correlator, p_arr, mom_dim, labels)
         throw(DimensionMismatch("number of labels not correct."))
     end
 
-    hdf5_file = HDF5.h5open(string(correlator_file), "w")
+    file = HDF5.h5open(string(correlator_file), "w")
 
     # Write correlator with dimension labels
     for (iₚ, p) in enumerate(p_arr)
         p_str = "p"*join(p, ",")
-        hdf5_file["Correlators/$p_str"] = selectdim(correlator, mom_dim, iₚ)
+        file["Correlators/$p_str"] = selectdim(correlator, mom_dim, iₚ)
     end
-    HDF5.attributes(hdf5_file["Correlators"])["DIMENSION_LABELS"] = labels
+    HDF5.attributes(file["Correlators"])["DIMENSION_LABELS"] = labels
 
     # Write parameter file
-    hdf5_file["parms.toml"] = parms.parms_toml_string
+    file["parms.toml"] = parms.parms_toml_string
 
     # Write program information
-    hdf5_file["Program Information"] = parms_toml["Program Information"]
+    file["Program Information"] = parms_toml["Program Information"]
     
-    close(hdf5_file)
+    close(file)
 
     return
 end =#
@@ -439,27 +439,27 @@ function write_sparse_modes(sparse_modes_file, sparse_modes_arrays)
     # Unpack `sparse_modes_arrays`
     x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
-    hdf5_file = HDF5.h5open(string(sparse_modes_file), "w")
+    file = HDF5.h5open(string(sparse_modes_file), "w")
 
     # Write sparse spaces
-    hdf5_file["sparse_space_sink"] = x_sink_μiₓt
-    hdf5_file["sparse_space_src"] = x_src_μiₓt
+    file["sparse_space_sink"] = x_sink_μiₓt
+    file["sparse_space_src"] = x_src_μiₓt
 
     # Write sparse modes
-    hdf5_file["sparse_modes_sink"] = v_sink_ciₓkt
-    hdf5_file["sparse_modes_src"] = v_src_ciₓkt
+    file["sparse_modes_sink"] = v_sink_ciₓkt
+    file["sparse_modes_src"] = v_src_ciₓkt
 
     # Set attributes
-    HDF5.attrs(hdf5_file["sparse_space_sink"])["DIMENSION_LABELS"] =
+    HDF5.attrs(file["sparse_space_sink"])["DIMENSION_LABELS"] =
         ["sink t", "position", "component"]
-    HDF5.attrs(hdf5_file["sparse_space_src"])["DIMENSION_LABELS"] =
+    HDF5.attrs(file["sparse_space_src"])["DIMENSION_LABELS"] =
         ["source t", "position", "component"]
-    HDF5.attrs(hdf5_file["sparse_modes_sink"])["DIMENSION_LABELS"] =
+    HDF5.attrs(file["sparse_modes_sink"])["DIMENSION_LABELS"] =
         ["t", "Laplace mode", "position", "color"]
-    HDF5.attrs(hdf5_file["sparse_modes_src"])["DIMENSION_LABELS"] =
+    HDF5.attrs(file["sparse_modes_src"])["DIMENSION_LABELS"] =
         ["t", "Laplace mode", "position", "color"]
 
-    close(hdf5_file)
+    close(file)
 
     return
 end
