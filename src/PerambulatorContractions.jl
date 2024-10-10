@@ -12,6 +12,9 @@ import Combinatorics as Comb
 import Dates
 import PrecompileTools
 
+# Disable multithreading in BLAS operations
+LA.BLAS.set_num_threads(1)
+
 include("functions/allocate_arrays.jl")
 include("functions/contractions_meson.jl")
 include("functions/contractions_DD.jl")

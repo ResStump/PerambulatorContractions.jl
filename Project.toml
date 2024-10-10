@@ -1,7 +1,7 @@
 name = "PerambulatorContractions"
 uuid = "a7d622fa-7075-485b-a69e-58a92e309e85"
 authors = ["Andres Stump <andres.stump@hu-berlin.de>"]
-version = "1.4.2"
+version = "1.4.3"
 
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
