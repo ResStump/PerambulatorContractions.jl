@@ -171,7 +171,7 @@ function dad_local_contractons!(
     permutedims!(C_tnmiₚ, C_nmiₚt, [4, 1, 2, 3])
 
     # Normalization
-    C_tnmiₚ *= (prod(parms.Nₖ)/N_points)^2
+    C_tnmiₚ .*= (prod(parms.Nₖ)/N_points)^2
 
     return
 end

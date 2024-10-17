@@ -139,7 +139,7 @@ function DD_local_contractons!(
     permutedims!(C_tnmn̄m̄iₚ, C_nmn̄m̄iₚt, [6, 1, 2, 3, 4, 5])
 
     # Normalization
-    C_tnmn̄m̄iₚ *= (prod(parms.Nₖ)/N_points)^2
+    C_tnmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
 
     return
 end
@@ -516,8 +516,8 @@ function DD_mixed_contractons!(
     permutedims!(Cₗₙ_tnmn̄m̄iₚ, Cₗₙ_nmn̄m̄iₚt, [6, 1, 2, 3, 4, 5])
 
     # Normalization
-    Cₙₗ_tnmn̄m̄iₚ *= prod(parms.Nₖ)/N_points
-    Cₗₙ_tnmn̄m̄iₚ *= prod(parms.Nₖ)/N_points
+    Cₙₗ_tnmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
+    Cₗₙ_tnmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
 
     return
 end

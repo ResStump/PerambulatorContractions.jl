@@ -275,8 +275,8 @@ function DD_dad_nonlocal_local_mixed_contractons!(
     permutedims!(Cₗₙ_tnmn̄m̄iₚ, Cₗₙ_nmn̄m̄iₚt, [6, 1, 2, 3, 4, 5])
 
     # Normalization
-    Cₙₗ_tnmn̄m̄iₚ *= prod(parms.Nₖ)/N_points
-    Cₗₙ_tnmn̄m̄iₚ *= prod(parms.Nₖ)/N_points
+    Cₙₗ_tnmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
+    Cₗₙ_tnmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
 
     return
 end
@@ -531,8 +531,8 @@ function DD_dad_local_mixed_contractons!(
     permutedims!(C_dad_DD_tnmn̄m̄iₚ, C_dad_DD_nmn̄m̄iₚt, [6, 1, 2, 3, 4, 5])
 
     # Normalization
-    C_DD_dad_tnmn̄m̄iₚ *= (prod(parms.Nₖ)/N_points)^2
-    C_dad_DD_tnmn̄m̄iₚ *= (prod(parms.Nₖ)/N_points)^2
+    C_DD_dad_tnmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
+    C_dad_DD_tnmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
 
     return
 end
