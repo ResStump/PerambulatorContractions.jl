@@ -39,9 +39,13 @@ end
 # Global Parameters
 ###################
 
+# Set global parameters
+PC.read_parameters()
+
 D.@everywhere begin
-    # Set global parameters
-    PC.read_parameters()
+    # Broadcast global parameters
+    PC.parms = $(PC.parms)
+    PC.parms_toml = $(PC.parms_toml)
 
     # Set which momenta should be used
     if PC.parms_toml["Momenta"]["p"] == "all"
