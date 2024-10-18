@@ -134,10 +134,6 @@ labels = ["Gamma2", "Gamma1", "t"]
 #############
 
 function compute_contractions!(t₀)
-    #= correlators = [] =#
-        
-    
-
     # Compute correlator entries
     @time "      dad_local_contractons!" begin
         # Index for source time `t₀`
