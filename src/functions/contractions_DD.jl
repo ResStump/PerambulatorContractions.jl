@@ -145,9 +145,7 @@ function DD_local_contractons!(
 end
 
 @doc raw"""
-    DD_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray,
-    sparse_modes_arrays_tt₀::NTuple{4, AbstractArray},
-    Γ_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector})
+    DD_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> C_tnmn̄m̄iₚ::AbstractArray
 
 Contract the charm perambulator `τ_charm_αkβl_t` and the light perambulator `τ_light_αkβl_t`
 and the sparse Laplace modes in `sparse_modes_arrays_tt₀` to get the local DD correlator and
