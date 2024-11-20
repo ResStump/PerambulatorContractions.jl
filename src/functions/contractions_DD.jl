@@ -41,7 +41,7 @@ function DD_local_contractons!(
 
     # Loop over all sink time indices (using multithreading)
     Threads.@threads for iₜ in 1:parms.Nₜ
-        # Time index for storing correlator entrie
+        # Time index for storing correlator entry
         i_Δt = mod1(iₜ-t₀, parms.Nₜ)
 
         # Perambulators at sink time t
@@ -145,7 +145,7 @@ function DD_local_contractons!(
 end
 
 @doc raw"""
-    DD_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> C_tnmn̄m̄iₚ::AbstractArray
+    DD_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> C_nmn̄m̄iₚ::AbstractArray
 
 Contract the charm perambulator `τ_charm_αkβl_t` and the light perambulator `τ_light_αkβl_t`
 and the sparse Laplace modes in `sparse_modes_arrays_tt₀` to get the local DD correlator and
@@ -154,8 +154,8 @@ source time `t₀`. The matrices in `Γ_arr` are the matrices in the interpolati
 The correlator is computed for all possible combinations of them. This gives a vacuum
 expectation value of the form \
 `<(ūΓ₁c d̄Γ₂c)(x') (c̄Γbar₃u c̄Γbar₄d)(x)>` \
-(in position space). The result is stored in `C_tnmn̄m̄iₚ` where the indices n, m, n̄, m̄
-correspond to the indices of the Γ's in the expectation value in the given order.
+(in position space). The result is returned as the array `C_nmn̄m̄iₚ` where the indices
+n, m, n̄, m̄ correspond to the indices of the Γ's in the expectation value in the given order.
 
 The array `p_arr` contains the integer momenta the correlator is projected to
 (index iₚ in `C_tnmn̄m̄iₚ`).
@@ -320,7 +320,7 @@ function DD_nonlocal_contractons!(
 
     # Loop over all sink time indices (using multithreading)
     Threads.@threads for iₜ in 1:parms.Nₜ
-        # Time index for storing correlator entrie
+        # Time index for storing correlator entry
         i_Δt = mod1(iₜ-t₀, parms.Nₜ)
 
         # Perambulators at sink time t
@@ -389,6 +389,115 @@ function DD_nonlocal_contractons!(
 end
 
 @doc raw"""
+    DD_nonlocal_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray,
+    Φ_kliₚ_t::AbstractArray, Φ_kliₚ_t₀::AbstractArray,
+    Γ_arr::AbstractVector{<:AbstractMatrix}, Iₚ::AbstractVector{<:Integer};
+    swap_ud::Bool=false) -> C_nmn̄m̄::AbstractArray
+
+Contract the charm perambulator `τ_charm_αkβl_t`, the light perambulator `τ_light_αkβl_t`
+and the mode doublets `Φ_kliₚ_t` and `Φ_kliₚ_t₀` to get the nolocal DD correlator and return
+it. These arrays are assumed to only contain data for a single sink time `t` and source time
+`t₀`. The matrices in `Γ_arr` are the matrices in the interpolating operators.
+The correlator is computed for all possible combinations of them. This gives a vacuum
+expectation value of the form (in position space) \
+`<(ūΓ₁c)(x₁) (d̄Γ₂c)(x₂) (c̄Γbar₃u)(x₃) (c̄Γbar₄d)(x₄)>` \
+ or \
+`<(ūΓ₁c)(x₁) (d̄Γ₂c)(x₂) (c̄Γbar₃d)(x₃) (c̄Γbar₄u)(x₄)>` \
+if `swap_ud` = true.
+    
+The result is returned as the array `C_nmn̄m̄` where the indices n, m, n̄, m̄ correspond to
+the indices of the Γ's in the expectation value in the given order.
+
+The four momentum indices in `Iₚ` are used for the momentum projection in the positions
+x₁, x₂, x₃ and x₄.
+"""
+function DD_nonlocal_contractons(
+    τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray,
+    Φ_kliₚ_t₀::AbstractArray, Γ_arr::AbstractVector{<:AbstractMatrix},
+    Iₚ::AbstractVector{<:Integer}; swap_ud::Bool=false
+)
+    # Copy array to not modify it outside of function
+    Iₚ = copy(Iₚ)
+
+    if swap_ud
+        # Swap momenta at source
+        permute!(Iₚ, [1, 2, 4, 3])
+    end
+
+    # Number of gamma matrices
+    Nᵧ = length(Γ_arr)
+
+    # Convert vector of γ-matrices to contiguous array and compute Γbar matrices
+    Γ_αβn = stack(Γ_arr)
+    TO.@tensoropt Γbar_αβn[α, β, n] := γ[4][α, α'] * conj(Γ_αβn)[β', α', n] * γ[4][β', β]
+
+    # Allocate correlator
+    C_nmn̄m̄ = Array{ComplexF64}(undef, Nᵧ, Nᵧ, Nᵧ, Nᵧ)
+
+    # Mode doublet at source for momenta `Iₚ[3]` and `Iₚ[4]`
+    Φ_kl_t₀p₃ = @view Φ_kliₚ_t₀[:, :, Iₚ[3]]
+    Φ_kl_t₀p₄ = @view Φ_kliₚ_t₀[:, :, Iₚ[4]]
+
+    # Light perambulator in backward direction
+    TO.@tensoropt (l, k) begin
+        τ_bw_light_kαβl_t[k, α, β, l] :=
+            γ[5][β, β'] * conj(τ_light_αkβl_t)[β', l, α', k] * γ[5][α', α]
+    end
+
+    # Mode doublets at sink for momenta `Iₚ[1]` and `Iₚ[2]`
+    Φ_kl_tp₁ = @view Φ_kliₚ_t[:, :, Iₚ[1]]
+    Φ_kl_tp₂ = @view Φ_kliₚ_t[:, :, Iₚ[2]]
+
+    # Tensor contractions
+    #####################
+
+    # Disconnected parts
+    TO.@tensoropt (k, k', l, l') begin
+        C_disc1_nn̄[n, n̄] :=
+            Φ_kl_tp₁[k, k'] * Γ_αβn[α, α', n] *
+            τ_charm_αkβl_t[α', k', β, l'] *
+            conj(Φ_kl_t₀p₃)[l, l'] * Γbar_αβn[β, β', n̄] *
+            τ_bw_light_kαβl_t[l, β', α, k]
+
+        C_disc2_mm̄[m, m̄] :=
+            Φ_kl_tp₂[k, k'] * Γ_αβn[α, α', m] *
+            τ_charm_αkβl_t[α', k', β, l'] *
+            conj(Φ_kl_t₀p₄)[l, l'] * Γbar_αβn[β, β', m̄] *
+            τ_bw_light_kαβl_t[l, β', α, k]
+    end
+
+    # Connected part
+    TO.@tensoropt (l, k, l', k', l̃, k̃, l̃', k̃') begin
+        C_conn_nmn̄m̄[n, m, n̄, m̄] := 
+            Φ_kl_tp₁[k, k'] * Γ_αβn[α, α', n] *
+            τ_charm_αkβl_t[α', k', β, l'] *
+            conj(Φ_kl_t₀p₄)[l, l'] * Γbar_αβn[β, β', m̄] *
+            τ_bw_light_kαβl_t[l, β', α_, k̃] *
+            Φ_kl_tp₂[k̃, k̃'] * Γ_αβn[α_, α_', m] *
+            τ_charm_αkβl_t[α_', k̃', β_, l̃'] *
+            conj(Φ_kl_t₀p₃)[l̃, l̃'] * Γbar_αβn[β_, β_', n̄] *
+            τ_bw_light_kαβl_t[l̃, β_', α, k]
+    end
+
+    # Combine connected and disconnected part and store it in correlator
+    # (use Δt=t-t₀ as time)
+    if swap_ud
+        # Swap Gamma matrix indices at source
+        TO.@tensoropt begin
+            C_nmn̄m̄[n, m, m̄, n̄] =
+                C_disc1_nn̄[n, n̄]*C_disc2_mm̄[m, m̄] - C_conn_nmn̄m̄[n, m, n̄, m̄]
+        end
+    else
+        TO.@tensoropt begin
+            C_nmn̄m̄[n, m, n̄, m̄] =
+                C_disc1_nn̄[n, n̄]*C_disc2_mm̄[m, m̄] - C_conn_nmn̄m̄[n, m, n̄, m̄]
+        end
+    end
+
+    return C_nmn̄m̄
+end
+
+@doc raw"""
     DD_mixed_contractons!(Cₙₗ_tnmn̄m̄iₚ::AbstractArray, Cₗₙ_tnmn̄m̄iₚ::AbstractArray, τ_charm_αkβlt::AbstractArray, τ_light_αkβlt::AbstractArray, Φ_kltiₚ::AbstractArray, sparse_modes_arrays::NTuple{4, AbstractArray}, Γ_arr::AbstractVector{<:AbstractMatrix}, t₀::Integer, Iₚ_nonlocal::AbstractVector{<:Integer}, p_local_arr::AbstractVector{<:AbstractVector})
 
 Contract the charm perambulator `τ_charm_αkβlt`, the light perambulator `τ_light_αkβlt`,
@@ -444,7 +553,7 @@ function DD_mixed_contractons!(
 
     # Loop over all sink time indices (using multithreading)
     Threads.@threads for iₜ in 1:parms.Nₜ
-        # Time index for storing correlator entrie
+        # Time index for storing correlator entry
         i_Δt = mod1(iₜ-t₀, parms.Nₜ)
 
         # Perambulators at sink time t
