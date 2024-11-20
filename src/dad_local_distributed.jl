@@ -146,18 +146,19 @@ function compute_contractions!(t₀)
         # Unpack sparse modes arrays
         x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
-        # Convert arrays to vectors of arrays
+        # Convert arrays to vectors of arrays in the time axis
         τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
         τ_arr = eachslice(τ_αkβlt, dims=5)
         x_sink_arr = eachslice(x_sink_μiₓt, dims=3)
         v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)
 
         # Select sink time `t₀`
-        x_src_μiₓ_t₀ = x_src_μiₓt[:, :, i_t₀]
-        v_src_ciₓk_t₀ = v_src_ciₓkt[:, :, :, i_t₀]
+        x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
+        v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
 
+        # Function to compute contraction
         contraction = (τ_charm, τ, x_sink, v_sink) -> begin
-            PC.dad_local_contractons!(
+            PC.dad_local_contractons(
                 τ_charm, τ, (x_sink, x_src_μiₓ_t₀, v_sink, v_src_ciₓk_t₀),
                 Γ₁_arr, Γ₂_arr, p_arr
             )

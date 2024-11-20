@@ -177,7 +177,7 @@ function dad_local_contractons!(
 end
 
 @doc raw"""
-    τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_arr::AbstractVector{<:AbstractMatrix}, Γ₂_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector} -> C_nmiₚ::AbstractArray
+    dad_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_arr::AbstractVector{<:AbstractMatrix}, Γ₂_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> C_nmiₚ::AbstractArray
 
 Contract the charm perambulator `τ_charm_αkβl_t` and the light perambulator `τ_light_αkβl_t`
 and the sparse Laplace modes in `sparse_modes_arrays_tt₀` to get the local
@@ -196,7 +196,7 @@ in the given order.
 The array `p_arr` contains the integer momenta the correlator is projected to
 (index iₚ in the returned array `C_nmiₚ`).
 """
-function dad_local_contractons!(
+function dad_local_contractons(
     τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray,
     sparse_modes_arrays_tt₀::NTuple{4, AbstractArray},
     Γ₁_arr::AbstractVector{<:AbstractMatrix}, Γ₂_arr::AbstractVector{<:AbstractMatrix},
