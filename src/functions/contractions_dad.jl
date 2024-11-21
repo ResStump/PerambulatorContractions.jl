@@ -237,93 +237,118 @@ function dad_local_contractons(
             γ[5][α, α'] * conj(τ_light_αkβl_t)[α', k, β', l] * γ[5][β', β]
     end
 
-    # Loop over sink position iₓ′ and source position iₓ
-    for iₓ′ in 1:N_points, iₓ in 1:N_points
-        # Laplace modes at position iₓ′
-        v_sink_ck_iₓ′t = @view v_sink_ciₓk_t[:, iₓ′, :]
-
+    # Loop over source position iₓ
+    for iₓ in 1:N_points
         # Laplace modes at position iₓ
         v_src_ck_iₓt₀ = @view v_src_ciₓk_t₀[:, iₓ, :]
 
-        # Tensor contractions
-        #####################
-
-        # Smeared charm propagator (forward direction)
+        # Precontaction for smeared charm propagator
         TO.@tensoropt (k, l) begin
-            D⁻¹_charm_αaβb_iₓ′iₓ[α, a, β, b] :=
-                v_sink_ck_iₓ′t[a, k] * 
+            τv_charm_kαβb[k, α, β, b] :=
                 τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
         end
 
-        # Smeared light propagator (backward direction)
+        # Precontaction for smeared light propagator
         TO.@tensoropt (k, l) begin
-            D⁻¹_light_αaβb_iₓiₓ′[α, a, β, b] :=
-                conj(v_sink_ck_iₓ′t)[b, l] *
+            τv_light_kαβa[l, α, β, a] :=
                 γ₅τ_conjγ₅_light_αkβl_t[β, l, α, k] * v_src_ck_iₓt₀[a, k]
         end
 
-        # Light part
-        C_light_dd′ee′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_2)
-        for m in 1:Nᵧ_2
-            C_light_dd′ee′_m = @view C_light_dd′ee′n[:, :, :, :, m]
-            CΓ₂_αβ_m = @view CΓ₂_αβn[:, :, m]
-            CΓbarC₂_αβ_m = @view CΓbarC₂_αβn[:, :, m]
-            TO.@tensoropt begin
-                C_light_dd′ee′_m[d, d', e, e'] =
-                    CΓ₂_αβ_m[δ, ϵ] * D⁻¹_light_αaβb_iₓiₓ′[δ', d', ϵ, e] *
-                    CΓbarC₂_αβ_m[δ', ϵ'] * D⁻¹_light_αaβb_iₓiₓ′[ϵ', e', δ, d]
+        # Loop over sink position iₓ′
+        for iₓ′ in 1:N_points
+            # Laplace modes at position iₓ′
+            v_sink_ck_iₓ′t = @view v_sink_ciₓk_t[:, iₓ′, :]
+
+            # Tensor contractions
+            #####################
+
+            # Smeared charm propagator (forward direction)
+            TO.@tensoropt (k, ) begin
+                D⁻¹_charm_αaβb_iₓ′iₓ[α, a, β, b] :=
+                    v_sink_ck_iₓ′t[a, k] * τv_charm_kαβb[k, α, β, b]
             end
-        end
-
-        # Positive charm part
-        C_pos_charm_bb′cc′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_1)
-        for n in 1:Nᵧ_1
-            C_pos_charm_bb′cc′_n = @view C_pos_charm_bb′cc′n[:, :, :, :, n]
-            CΓ₁_αβ_n = @view CΓ₁_αβn[:, :, n]
-            CΓbarC₁_αβ_n = @view CΓbarC₁_αβn[:, :, n]
-            TO.@tensoropt begin
-                C_pos_charm_bb′cc′_n[b, b', c, c'] =
-                    CΓ₁_αβ_n[β, γ] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, β', b'] *
-                    CΓbarC₁_αβ_n[β', γ'] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, γ', c']
+            #= TO.@tensoropt (k, l) begin
+                D⁻¹_charm_αaβb_iₓ′iₓ_[α, a, β, b] :=
+                    v_sink_ck_iₓ′t[a, k] * 
+                    τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
             end
-        end
+            @assert D⁻¹_charm_αaβb_iₓ′iₓ ≈ D⁻¹_charm_αaβb_iₓ′iₓ_ =#
 
-        # Negative charm part
-        C_neg_charm_bb′cc′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_1)
-        for n in 1:Nᵧ_1
-            C_neg_charm_bb′cc′_n = @view C_neg_charm_bb′cc′n[:, :, :, :, n]
-            CΓ₁_αβ_n = @view CΓ₁_αβn[:, :, n]
-            CΓbarC₁_αβ_n = @view CΓbarC₁_αβn[:, :, n]
-            TO.@tensoropt begin
-                C_neg_charm_bb′cc′_n[b, b', c, c'] =
-                    CΓ₁_αβ_n[β, γ] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, γ', c'] *
-                    CΓbarC₁_αβ_n[β', γ'] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, β', b']
+            # Smeared light propagator (backward direction)
+            TO.@tensoropt (k, ) begin
+                D⁻¹_light_αaβb_iₓiₓ′[α, a, β, b] :=
+                    conj(v_sink_ck_iₓ′t)[b, l] * τv_light_kαβa[l, α, β, a]
             end
-        end
+            #= TO.@tensoropt (k, l) begin
+                D⁻¹_light_αaβb_iₓiₓ′_[α, a, β, b] :=
+                    conj(v_sink_ck_iₓ′t)[b, l] *
+                    γ₅τ_conjγ₅_light_αkβl_t[β, l, α, k] * v_src_ck_iₓt₀[a, k]
+            end
+            @assert D⁻¹_light_αaβb_iₓiₓ′ ≈ D⁻¹_light_αaβb_iₓiₓ′_ =#
 
-        # Combine light and charm parts (sum over epsilon tensors)
-        TO.@tensoropt begin
-            C_nm[n, m] :=
-                (
-                    C_light_dd′ee′n[b, b', c, c', m] +
-                    C_light_dd′ee′n[c, c', b, b', m] -
-                    C_light_dd′ee′n[b, c', c, b', m] -
-                    C_light_dd′ee′n[c, b', b, c', m]
-                ) *
-                (
-                    C_pos_charm_bb′cc′n[b, b', c, c', n] -
-                    C_neg_charm_bb′cc′n[b, b', c, c', n]
-                )
-        end
+            # Light part
+            C_light_dd′ee′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_2)
+            for m in 1:Nᵧ_2
+                C_light_dd′ee′_m = @view C_light_dd′ee′n[:, :, :, :, m]
+                CΓ₂_αβ_m = @view CΓ₂_αβn[:, :, m]
+                CΓbarC₂_αβ_m = @view CΓbarC₂_αβn[:, :, m]
+                TO.@tensoropt begin
+                    C_light_dd′ee′_m[d, d', e, e'] =
+                        CΓ₂_αβ_m[δ, ϵ] * D⁻¹_light_αaβb_iₓiₓ′[δ', d', ϵ, e] *
+                        CΓbarC₂_αβ_m[δ', ϵ'] * D⁻¹_light_αaβb_iₓiₓ′[ϵ', e', δ, d]
+                end
+            end
 
-        # Momentum projection
-        m2πiΔx = -2π*im * 
-            (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t₀[:, iₓ])./parms.Nₖ
-        exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
-        for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
-            C_nm_iₚ = @view C_nmiₚ[:, :, iₚ]
+            # Positive charm part
+            C_pos_charm_bb′cc′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_1)
+            for n in 1:Nᵧ_1
+                C_pos_charm_bb′cc′_n = @view C_pos_charm_bb′cc′n[:, :, :, :, n]
+                CΓ₁_αβ_n = @view CΓ₁_αβn[:, :, n]
+                CΓbarC₁_αβ_n = @view CΓbarC₁_αβn[:, :, n]
+                TO.@tensoropt begin
+                    C_pos_charm_bb′cc′_n[b, b', c, c'] =
+                        CΓ₁_αβ_n[β, γ] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, β', b'] *
+                        CΓbarC₁_αβ_n[β', γ'] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, γ', c']
+                end
+            end
+
+            # Negative charm part
+            C_neg_charm_bb′cc′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_1)
+            for n in 1:Nᵧ_1
+                C_neg_charm_bb′cc′_n = @view C_neg_charm_bb′cc′n[:, :, :, :, n]
+                CΓ₁_αβ_n = @view CΓ₁_αβn[:, :, n]
+                CΓbarC₁_αβ_n = @view CΓbarC₁_αβn[:, :, n]
+                TO.@tensoropt begin
+                    C_neg_charm_bb′cc′_n[b, b', c, c'] =
+                        CΓ₁_αβ_n[β, γ] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, γ', c'] *
+                        CΓbarC₁_αβ_n[β', γ'] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, β', b']
+                end
+            end
+
+            # Combine light and charm parts (sum over epsilon tensors)
             TO.@tensoropt begin
-                C_nm_iₚ[n, m] += exp_mipΔx * C_nm[n, m]
+                C_nm[n, m] :=
+                    (
+                        C_light_dd′ee′n[b, b', c, c', m] +
+                        C_light_dd′ee′n[c, c', b, b', m] -
+                        C_light_dd′ee′n[b, c', c, b', m] -
+                        C_light_dd′ee′n[c, b', b, c', m]
+                    ) *
+                    (
+                        C_pos_charm_bb′cc′n[b, b', c, c', n] -
+                        C_neg_charm_bb′cc′n[b, b', c, c', n]
+                    )
+            end
+
+            # Momentum projection
+            m2πiΔx = -2π*im * 
+                (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t₀[:, iₓ])./parms.Nₖ
+            exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
+            for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
+                C_nm_iₚ = @view C_nmiₚ[:, :, iₚ]
+                TO.@tensoropt begin
+                    C_nm_iₚ[n, m] += exp_mipΔx * C_nm[n, m]
+                end
             end
         end
     end

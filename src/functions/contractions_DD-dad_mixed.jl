@@ -368,159 +368,184 @@ function DD_dad_local_mixed_contractons!(
         end
 
         # Loop over sink position iₓ′ and source position iₓ
-        for iₓ′ in 1:N_points, iₓ in 1:N_points
-            # Laplace modes at sink time t and position iₓ′
-            v_sink_ck_iₓ′t = @view v_sink_ciₓkt[:, iₓ′, :, iₜ]
-
+        for iₓ in 1:N_points
             # Laplace modes at src time t₀ and position iₓ
             v_src_ck_iₓt₀ = @view v_src_ciₓkt[:, iₓ, :, i_t₀]
 
-            # Smeared charm propagator (forward direction)
+            # Precontaction for smeared charm propagator
             TO.@tensoropt (k, l) begin
-                D⁻¹_charm_αaβb_iₓ′iₓ[α, a, β, b] :=
-                    v_sink_ck_iₓ′t[a, k] * 
+                τv_charm_kαβb[k, α, β, b] :=
                     τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
             end
 
-            # Smeared light propagator (backward direction)
+            # Precontaction for smeared light propagator
             TO.@tensoropt (k, l) begin
-                D⁻¹_light_αaβb_iₓiₓ′[α, a, β, b] :=
-                    v_src_ck_iₓt₀[a, k] *
-                    τ_bw_light_kαβl_t[k, α, β, l] * conj(v_sink_ck_iₓ′t)[b, l]
+                vτ_light_lαβa[l, α, β, a] :=
+                    v_src_ck_iₓt₀[a, k] * τ_bw_light_kαβl_t[k, α, β, l]
             end
 
-            # DD-dad tensor contractions
-            ############################
+            # Loop over sink position iₓ′ and source position iₓ
+            for iₓ′ in 1:N_points
+                # Laplace modes at sink time t and position iₓ′
+                v_sink_ck_iₓ′t = @view v_sink_ciₓkt[:, iₓ′, :, iₜ]
 
-            # Pre-contractions
-            TO.@tensoropt begin
-                A1[β, β_', c', d', m] :=
-                    D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, c'] * Γ_DD_αβn[α_', α_, m] *
-                    D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b]
-                A2[β_', β', b', e', n, m̄] :=
-                    CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a] *
-                    Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', b']
-            end            
-
-            # Positive part
-            TO.@tensoropt begin
-                C_pos_bcdenmn̄m̄[b', c', d', e', n, m, n̄, m̄] :=
-                    CΓbarC₁_dad_αβn[β', β, n̄] *
-                    A1[β, β_', c', d', m] * A2[β_', β', b', e', n, m̄]
-            end
-
-            # Negative part
-            TO.@tensoropt begin
-                C_neg_bcdenmn̄m̄[b', c', d', e', n, m, n̄, m̄] :=
-                    CΓbarC₁_dad_αβn[β, β', n̄] *
-                    A1[β, β_', b', d', m] * A2[β_', β', c', e', n, m̄]
-            end
-
-            #= # Positive part
-            TO.@tensoropt begin
-                C_pos_bcdenmn̄m̄_old[b', c', d', e', n, m, n̄, m̄] :=
-                    Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', b'] *
-                    CΓbarC₁_dad_αβn[β', β, n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, c'] *
-                    Γ_DD_αβn[α_', α_, m] * D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b] *
-                    CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a]
-            end
-            @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old
-
-            # Negative part
-            TO.@tensoropt begin
-                C_neg_bcdenmn̄m̄_old[b', c', d', e', n, m, n̄, m̄] :=
-                    Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', c'] *
-                    CΓbarC₁_dad_αβn[β, β', n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, b'] *
-                    Γ_DD_αβn[α_', α_, m] * D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b] *
-                    CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a]
-            end
-            @assert C_neg_bcdenmn̄m̄ ≈ C_neg_bcdenmn̄m̄_old =#
-
-            # Sum over epsilon tensors
-            TO.@tensoropt begin
-                C_nmn̄m̄[n, m, n̄, m̄] :=
-                    C_pos_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
-                    C_neg_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
-                    C_pos_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄] +
-                    C_neg_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄]
-            end
-
-            # Momentum projection
-            m2πiΔx = -2π*im * 
-                (x_sink_μiₓt[:, iₓ′, iₜ] - x_src_μiₓt[:, iₓ, i_t₀])./parms.Nₖ
-            exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
-            for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
-                # Use Δt=t-t₀ as time
-                C_DD_dad_nmn̄m̄_iₚΔt = @view C_DD_dad_nmn̄m̄iₚt[:, :, :, :, iₚ, i_Δt]
-                TO.@tensoropt begin
-                    C_DD_dad_nmn̄m̄_iₚΔt[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                # Smeared charm propagator (forward direction)
+                TO.@tensoropt (k, ) begin
+                    D⁻¹_charm_αaβb_iₓ′iₓ[α, a, β, b] :=
+                        v_sink_ck_iₓ′t[a, k] * τv_charm_kαβb[k, α, β, b]
                 end
-            end
+                #= TO.@tensoropt (k, l) begin
+                    D⁻¹_charm_αaβb_iₓ′iₓ_[α, a, β, b] :=
+                        v_sink_ck_iₓ′t[a, k] * 
+                        τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
+                end
+                @assert D⁻¹_charm_αaβb_iₓ′iₓ ≈ D⁻¹_charm_αaβb_iₓ′iₓ_ =#
 
-            # dad-DD tensor contractions
-            ############################
+                # Smeared light propagator (backward direction)
+                TO.@tensoropt (l, ) begin
+                    D⁻¹_light_αaβb_iₓiₓ′[α, a, β, b] :=
+                        vτ_light_lαβa[l, α, β, a] * conj(v_sink_ck_iₓ′t)[b, l]
+                end
+                #= TO.@tensoropt (k, l) begin
+                    D⁻¹_light_αaβb_iₓiₓ′_[α, a, β, b] :=
+                        v_src_ck_iₓt₀[a, k] *
+                        τ_bw_light_kαβl_t[k, α, β, l] * conj(v_sink_ck_iₓ′t)[b, l]
+                end
+                @assert D⁻¹_light_αaβb_iₓiₓ′ ≈ D⁻¹_light_αaβb_iₓiₓ′_ =#
 
-            # Pre-contractions
-            TO.@tensoropt begin
-                A1[β, β_', c, d, n̄] :=
-                    D⁻¹_charm_αaβb_iₓ′iₓ[β, c, α_, a'] * Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d]
-                A2[β_', β', b, e, m, m̄] :=
-                    CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e] *
-                    Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', b, α', b']
-            end
-            
-            # Positive part
-            TO.@tensoropt begin
-                C_pos_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
-                    CΓ₁_dad_αβn[β', β, n] *
-                    A1[β, β_', c, d, n̄] * A2[β_', β', b, e, m, m̄]
-            end
+                # DD-dad tensor contractions
+                ############################
 
-            # Negative part
-            TO.@tensoropt begin
-                C_neg_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
-                    CΓ₁_dad_αβn[β, β', n] *
-                    A1[β, β_', b, d, n̄] * A2[β_', β', c, e, m, m̄]
-            end
-
-            #= # Positive part
-            TO.@tensoropt begin
-                C_pos_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
-                    Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', b, α', b'] *
-                    CΓ₁_dad_αβn[β', β, n] * D⁻¹_charm_αaβb_iₓ′iₓ[β, c, α_, a'] *
-                    Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d] *
-                    CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e]
-            end
-            @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old
-
-            # Negative part
-            TO.@tensoropt begin
-                C_neg_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
-                    Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', c, α', b'] *
-                    CΓ₁_dad_αβn[β, β', n] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, α_, a'] *
-                    Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d] *
-                    CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e]
-            end
-            @assert C_neg_bcdenmn̄m̄ ≈ C_neg_bcdenmn̄m̄_old =#
-
-            # Sum over epsilon tensors
-            TO.@tensoropt begin
-                C_nmn̄m̄[n, m, n̄, m̄] :=
-                    C_pos_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
-                    C_neg_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
-                    C_pos_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄] +
-                    C_neg_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄]
-            end
-
-            # Momentum projection
-            m2πiΔx = -2π*im * 
-                (x_sink_μiₓt[:, iₓ′, iₜ] - x_src_μiₓt[:, iₓ, i_t₀])./parms.Nₖ
-            exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
-            for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
-                # Use Δt=t-t₀ as time
-                C_dad_DD_nmn̄m̄_iₚΔt = @view C_dad_DD_nmn̄m̄iₚt[:, :, :, :, iₚ, i_Δt]
+                # Pre-contractions
                 TO.@tensoropt begin
-                    C_dad_DD_nmn̄m̄_iₚΔt[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                    A1[β, β_', c', d', m] :=
+                        D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, c'] * Γ_DD_αβn[α_', α_, m] *
+                        D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b]
+                    A2[β_', β', b', e', n, m̄] :=
+                        CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a] *
+                        Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', b']
+                end            
+
+                # Positive part
+                TO.@tensoropt begin
+                    C_pos_bcdenmn̄m̄[b', c', d', e', n, m, n̄, m̄] :=
+                        CΓbarC₁_dad_αβn[β', β, n̄] *
+                        A1[β, β_', c', d', m] * A2[β_', β', b', e', n, m̄]
+                end
+
+                # Negative part
+                TO.@tensoropt begin
+                    C_neg_bcdenmn̄m̄[b', c', d', e', n, m, n̄, m̄] :=
+                        CΓbarC₁_dad_αβn[β, β', n̄] *
+                        A1[β, β_', b', d', m] * A2[β_', β', c', e', n, m̄]
+                end
+
+                #= # Positive part
+                TO.@tensoropt begin
+                    C_pos_bcdenmn̄m̄_old[b', c', d', e', n, m, n̄, m̄] :=
+                        Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', b'] *
+                        CΓbarC₁_dad_αβn[β', β, n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, c'] *
+                        Γ_DD_αβn[α_', α_, m] * D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b] *
+                        CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a]
+                end
+                @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old
+
+                # Negative part
+                TO.@tensoropt begin
+                    C_neg_bcdenmn̄m̄_old[b', c', d', e', n, m, n̄, m̄] :=
+                        Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', c'] *
+                        CΓbarC₁_dad_αβn[β, β', n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, b'] *
+                        Γ_DD_αβn[α_', α_, m] * D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b] *
+                        CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a]
+                end
+                @assert C_neg_bcdenmn̄m̄ ≈ C_neg_bcdenmn̄m̄_old =#
+
+                # Sum over epsilon tensors
+                TO.@tensoropt begin
+                    C_nmn̄m̄[n, m, n̄, m̄] :=
+                        C_pos_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                        C_neg_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                        C_pos_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄] +
+                        C_neg_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄]
+                end
+
+                # Momentum projection
+                m2πiΔx = -2π*im * 
+                    (x_sink_μiₓt[:, iₓ′, iₜ] - x_src_μiₓt[:, iₓ, i_t₀])./parms.Nₖ
+                exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
+                for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
+                    # Use Δt=t-t₀ as time
+                    C_DD_dad_nmn̄m̄_iₚΔt = @view C_DD_dad_nmn̄m̄iₚt[:, :, :, :, iₚ, i_Δt]
+                    TO.@tensoropt begin
+                        C_DD_dad_nmn̄m̄_iₚΔt[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                    end
+                end
+
+                # dad-DD tensor contractions
+                ############################
+
+                # Pre-contractions
+                TO.@tensoropt begin
+                    A1[β, β_', c, d, n̄] :=
+                        D⁻¹_charm_αaβb_iₓ′iₓ[β, c, α_, a'] * Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d]
+                    A2[β_', β', b, e, m, m̄] :=
+                        CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e] *
+                        Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', b, α', b']
+                end
+                
+                # Positive part
+                TO.@tensoropt begin
+                    C_pos_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
+                        CΓ₁_dad_αβn[β', β, n] *
+                        A1[β, β_', c, d, n̄] * A2[β_', β', b, e, m, m̄]
+                end
+
+                # Negative part
+                TO.@tensoropt begin
+                    C_neg_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
+                        CΓ₁_dad_αβn[β, β', n] *
+                        A1[β, β_', b, d, n̄] * A2[β_', β', c, e, m, m̄]
+                end
+
+                #= # Positive part
+                TO.@tensoropt begin
+                    C_pos_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
+                        Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', b, α', b'] *
+                        CΓ₁_dad_αβn[β', β, n] * D⁻¹_charm_αaβb_iₓ′iₓ[β, c, α_, a'] *
+                        Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d] *
+                        CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e]
+                end
+                @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old
+
+                # Negative part
+                TO.@tensoropt begin
+                    C_neg_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
+                        Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', c, α', b'] *
+                        CΓ₁_dad_αβn[β, β', n] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, α_, a'] *
+                        Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d] *
+                        CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e]
+                end
+                @assert C_neg_bcdenmn̄m̄ ≈ C_neg_bcdenmn̄m̄_old =#
+
+                # Sum over epsilon tensors
+                TO.@tensoropt begin
+                    C_nmn̄m̄[n, m, n̄, m̄] :=
+                        C_pos_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                        C_neg_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                        C_pos_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄] +
+                        C_neg_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄]
+                end
+
+                # Momentum projection
+                m2πiΔx = -2π*im * 
+                    (x_sink_μiₓt[:, iₓ′, iₜ] - x_src_μiₓt[:, iₓ, i_t₀])./parms.Nₖ
+                exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
+                for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
+                    # Use Δt=t-t₀ as time
+                    C_dad_DD_nmn̄m̄_iₚΔt = @view C_dad_DD_nmn̄m̄iₚt[:, :, :, :, iₚ, i_Δt]
+                    TO.@tensoropt begin
+                        C_dad_DD_nmn̄m̄_iₚΔt[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                    end
                 end
             end
         end
