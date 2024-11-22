@@ -223,7 +223,7 @@ function main()
         println("\n")
 
         # Run garbage collector
-        GC.gc()
+        D.@everywhere GC.gc()
     end
 
     # Wait until all ranks finished
