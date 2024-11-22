@@ -164,36 +164,36 @@ labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
 #############
 
 function compute_contractions!(t₀)
-    # Index for source time `t₀`
-    i_t₀ = t₀+1
-
-    # Convert arrays to vectors of arrays in the time axis
-    τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
-    τ_arr = eachslice(τ_αkβlt, dims=5)
-    Φ_arr = eachslice(Φ_kltiₚ, dims=3)
-
-    # Select sink time `t₀`
-    Φ_kliₚ_t₀ = @view Φ_kltiₚ[:, :, i_t₀, :]
-
-    # Function to compute contractions
-    contractions = (τ_charm, τ, Φ_t) -> begin
-        C1_arr = []
-        C2_arr = []
-
-        # Loop over all momentum index combinations
-        for Iₚ in Iₚ_arr
-            C1 = PC.DD_nonlocal_contractons(τ_charm, τ, Φ_t, Φ_kliₚ_t₀, Γ_arr, Iₚ)
-            C2 = PC.DD_nonlocal_contractons(τ_charm, τ, Φ_t, Φ_kliₚ_t₀, Γ_arr, Iₚ,
-                                            swap_ud=true)
-            push!(C1_arr, C1)
-            push!(C2_arr, C2)
-        end
-
-        # Return as contiguous arrays
-        return stack(C1_arr), stack(C2_arr)
-    end
-          
     @time "      DD nolocal contractons" begin
+        # Index for source time `t₀`
+        i_t₀ = t₀+1
+
+        # Convert arrays to vectors of arrays in the time axis
+        τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
+        τ_arr = eachslice(τ_αkβlt, dims=5)
+        Φ_arr = eachslice(Φ_kltiₚ, dims=3)
+
+        # Select sink time `t₀`
+        Φ_kliₚ_t₀ = @view Φ_kltiₚ[:, :, i_t₀, :]
+
+        # Function to compute contractions
+        contractions = (τ_charm, τ, Φ_t) -> begin
+            C1_arr = []
+            C2_arr = []
+
+            # Loop over all momentum index combinations
+            for Iₚ in Iₚ_arr
+                C1 = PC.DD_nonlocal_contractons(τ_charm, τ, Φ_t, Φ_kliₚ_t₀, Γ_arr, Iₚ)
+                C2 = PC.DD_nonlocal_contractons(τ_charm, τ, Φ_t, Φ_kliₚ_t₀, Γ_arr, Iₚ,
+                                                swap_ud=true)
+                push!(C1_arr, C1)
+                push!(C2_arr, C2)
+            end
+
+            # Return as contiguous arrays
+            return stack(C1_arr), stack(C2_arr)
+        end
+          
         # Distribute workload and fetch result
         corr_arr = D.pmap(contractions, τ_charm_arr, τ_arr, Φ_arr)
 
