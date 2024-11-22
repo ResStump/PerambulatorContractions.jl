@@ -284,7 +284,6 @@ function DD_local_contractons(
                 (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t[:, iₓ])./parms.Nₖ
             exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
             for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
-                # Use Δt=t-t₀ as time
                 C_nmn̄m̄_iₚ = @view C_nmn̄m̄iₚ[:, :, :, :, iₚ]
                 TO.@tensoropt begin
                     C_nmn̄m̄_iₚ[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
@@ -784,4 +783,251 @@ function DD_mixed_contractons!(
     Cₗₙ_tnmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
 
     return
+end
+
+@doc raw"""
+    DD_mixed_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray,
+    Φ_kliₚ_t₀::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ_arr::AbstractVector{<:AbstractMatrix}, Iₚ_nonlocal::AbstractVector{<:Integer}, p_local_arr::AbstractVector{<:AbstractVector}) -> (Cₙₗ_nmn̄m̄iₚ::AbstractArray, Cₗₙ_nmn̄m̄iₚ::AbstractArray)
+
+Contract the charm perambulator `τ_charm_αkβl_t`, the light perambulator `τ_light_αkβl_t`,
+the mode doublets `Φ_kliₚ_t` and `Φ_kliₚ_t₀` and the sparse Laplace modes in
+`sparse_modes_arrays` to get the mixed DD correlators and return it.  These arrays are
+assumed to only contain data for a single sink time `t` and source time `t₀`.
+The matrices in `Γ_arr` are the matrices in the interpolating operators. The correlator is
+computed for all possible combinations of them. This gives vacuum expectation values of the
+form (in position space) \
+`<(ūΓ₁c)(x₁) (d̄Γ₂c)(x₂) (c̄Γbar₃u c̄Γbar₄d)(x)>` \
+(nonlocal-local) and \
+`<(ūΓ₁c d̄Γ₂c)(x) (c̄Γbar₃u)(x₁) (c̄Γbar₄d)(x₂)>` \
+(local-nonlocal). The first one is returned as `Cₙₗ_nmn̄m̄iₚ` and the second one as
+`Cₗₙ_nmn̄m̄iₚ` where the indices n, m, n̄, m̄ correspond to the indices of the Γ's in the
+expectation values in the given order.
+
+The two momentum indices in `Iₚ_nonlocal` are used for the momentum projection in
+the nonlocal operator (positions x₁ and x₂). The array `p_local_arr` contains the integer
+momenta for the momentum projection in the local operator (index iₚ in `Cₙₗ_tnmn̄m̄iₚ` and
+`Cₗₙ_tnmn̄m̄iₚ`).
+"""
+function DD_mixed_contractons(
+    τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray,
+    Φ_kliₚ_t₀::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray},
+    Γ_arr::AbstractVector{<:AbstractMatrix}, Iₚ_nonlocal::AbstractVector{<:Integer},
+    p_local_arr::AbstractVector{<:AbstractVector}
+)
+    # Unpack sparse modes arrays
+    x_sink_μiₓ_t, x_src_μiₓ_t₀, v_sink_ciₓk_t, v_src_ciₓk_t₀ = sparse_modes_arrays_tt₀
+
+    # Number of points on spares lattice
+    N_points = size(x_sink_μiₓ_t, 2)
+
+    # Number of gamma matrices
+    Nᵧ = length(Γ_arr)
+
+    # Convert vector of γ-matrices to contiguous array and compute Γbar matrices
+    Γ_αβn = stack(Γ_arr)
+    TO.@tensoropt Γbar_αβn[α, β, n] := γ[4][α, α'] * conj(Γ_αβn)[β', α', n] * γ[4][β', β]
+
+    # Convert momentum array to contiguous array
+    p_local_μiₚ = stack(p_local_arr)
+
+    # Allocate correlator
+    Cₙₗ_nmn̄m̄iₚ = zeros(ComplexF64, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(p_local_arr))
+    Cₗₙ_nmn̄m̄iₚ = zeros(ComplexF64, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(p_local_arr))
+
+    # Mode doublet at source time `t₀` for momenta `Iₚ_nonlocal[1]` and `Iₚ_nonlocal[2]`
+    Φ_kl_t₀p₁ = @view Φ_kliₚ_t₀[:, :, Iₚ_nonlocal[1]]
+    Φ_kl_t₀p₂ = @view Φ_kliₚ_t₀[:, :, Iₚ_nonlocal[2]]
+
+    # Mode doublets at sink time t for momenta `Iₚ_nonlocal[1]` and `Iₚ_nonlocal[2]`
+    Φ_kl_tp₁ = @view Φ_kliₚ_t[:, :, Iₚ_nonlocal[1]]
+    Φ_kl_tp₂ = @view Φ_kliₚ_t[:, :, Iₚ_nonlocal[2]]
+
+    # Light perambulator in backward direction
+    TO.@tensoropt (l, k) begin
+        τ_bw_light_kαβl_t[k, α, β, l] :=
+            γ[5][β, β'] * conj(τ_light_αkβl_t)[β', l, α', k] * γ[5][α', α]
+    end
+
+    # Contract mode doublet and charm perambulator
+    TO.@tensoropt (k, k', l, l') begin
+        # For nonlocal-local correlator
+        Φτ_charm_kαβl_tp₁[k, α, β, l] := Φ_kl_tp₁[k, k'] * τ_charm_αkβl_t[α, k', β, l]
+        Φτ_charm_kαβl_tp₂[k, α, β, l] := Φ_kl_tp₂[k, k'] * τ_charm_αkβl_t[α, k', β, l]
+
+        # for local-nonlocal correlator
+        τΦ_charm_kαβl_t₀p₁[k, α, β, l] :=
+            τ_charm_αkβl_t[α, k, β, l'] * conj(Φ_kl_t₀p₁)[l, l']
+        τΦ_charm_kαβl_t₀p₂[k, α, β, l] :=
+            τ_charm_αkβl_t[α, k, β, l'] * conj(Φ_kl_t₀p₂)[l, l']
+    end
+
+    # Nonlocal-local tensor contractions
+    ####################################
+
+    # Loop over source position iₓ
+    for iₓ in 1:N_points
+        # Laplace modes at src time t₀ and position iₓ
+        v_src_ck_iₓt₀ = @view v_src_ciₓk_t₀[:, iₓ, :]
+
+        # Pre-contractions
+        TO.@tensoropt (k, l) begin
+            Φτv_charm_kαβc_iₓtp₁[k, α, β, a] := 
+                Φτ_charm_kαβl_tp₁[k, α, β, l] * conj(v_src_ck_iₓt₀)[a, l]
+            Φτv_charm_kαβc_iₓtp₂[k, α, β, a] := 
+                Φτ_charm_kαβl_tp₂[k, α, β, l] * conj(v_src_ck_iₓt₀)[a, l]
+            vτ_bw_light_αcβk_iₓt[β, a, α, k] := 
+                v_src_ck_iₓt₀[a, l] * τ_bw_light_kαβl_t[l, β, α, k]
+        end
+
+        # Disconnected part
+        #= TO.@tensoropt (l, k, l', k') begin
+            C_disc1_nn̄[n, n̄] :=
+                Φ_kl_tp₁[k, k'] * Γ_αβn[α, α', n] *
+                τ_charm_αkβl_t[α', k', β, l'] *
+                conj(v_src_ck_iₓt₀)[b, l'] * v_src_ck_iₓt₀[b, l] *
+                Γbar_αβn[β, β', n̄] * τ_bw_light_kαβl_t[l, β', α, k]
+            
+            C_disc2_mm̄[m, m̄] :=
+                Φ_kl_tp₂[k, k'] * Γ_αβn[α, α', m] *
+                τ_charm_αkβl_t[α', k', β, l'] *
+                conj(v_src_ck_iₓt₀)[b, l'] * v_src_ck_iₓt₀[b, l] *
+                Γbar_αβn[β, β', m̄] * τ_bw_light_kαβl_t[l, β', α, k]
+        end =#
+        TO.@tensoropt (l, k, l', k') begin
+            C_disc1_nn̄[n, n̄] :=
+                Γ_αβn[α, α', n] * Φτv_charm_kαβc_iₓtp₁[k, α', β, b] *
+                Γbar_αβn[β, β', n̄] * vτ_bw_light_αcβk_iₓt[β', b, α, k]
+            
+            C_disc2_mm̄[m, m̄] :=
+                Γ_αβn[α, α', m] * Φτv_charm_kαβc_iₓtp₂[k, α', β, a] *
+                Γbar_αβn[β, β', m̄] * vτ_bw_light_αcβk_iₓt[β', a, α, k]
+        end
+
+        # Connected part
+        #= TO.@tensoropt (l, k, l', k', l̃, k̃, l̃', k̃') begin
+            C_conn_nmn̄m̄[n, m, n̄, m̄] :=
+                Φ_kl_tp₁[k, k'] * Γ_αβn[α, α', n] *
+                τ_charm_αkβl_t[α', k', β, l'] *
+                conj(v_src_ck_iₓt₀)[b, l'] * v_src_ck_iₓt₀[b, l] *
+                Γbar_αβn[β, β', m̄] * τ_bw_light_kαβl_t[l, β', α_, k̃] *
+                Φ_kl_tp₂[k̃, k̃'] * Γ_αβn[α_, α_', m] *
+                τ_charm_αkβl_t[α_', k̃', β_, l̃'] *
+                conj(v_src_ck_iₓt₀)[b̃, l̃'] * v_src_ck_iₓt₀[b̃, l̃] *
+                Γbar_αβn[β_, β_', n̄] * τ_bw_light_kαβl_t[l̃, β_', α, k]
+        end =#
+        TO.@tensoropt (l, k, l', k', l̃, k̃, l̃', k̃') begin
+            C_conn_nmn̄m̄[n, m, n̄, m̄] :=
+                Γ_αβn[α, α', n] * Φτv_charm_kαβc_iₓtp₁[k, α', β, b] *
+                Γbar_αβn[β, β', m̄] * vτ_bw_light_αcβk_iₓt[β', b, α_, k̃] *
+                Γ_αβn[α_, α_', m] * Φτv_charm_kαβc_iₓtp₂[k̃, α_', β_, b̃] *
+                Γbar_αβn[β_, β_', n̄] * vτ_bw_light_αcβk_iₓt[β_', b̃, α, k]
+        end
+
+        # Combine connected and disconnected part
+        TO.@tensoropt begin
+            C_nmn̄m̄[n, m, n̄, m̄] :=
+                C_disc1_nn̄[n, n̄]*C_disc2_mm̄[m, m̄] - C_conn_nmn̄m̄[n, m, n̄, m̄]
+        end
+
+        # Momentum projection
+        p2πix = 2π*im * 
+            x_src_μiₓ_t₀[:, iₓ]./parms.Nₖ
+        exp_ipx_arr = exp.(p_local_μiₚ' * p2πix)
+        for iₚ in eachindex(p_local_arr)
+            Cₙₗ_nmn̄m̄_iₚ = @view Cₙₗ_nmn̄m̄iₚ[:, :, :, :, iₚ]
+
+            exp_ipx = exp_ipx_arr[iₚ]
+            TO.@tensoropt begin
+                Cₙₗ_nmn̄m̄_iₚ[n, m, n̄, m̄] += exp_ipx * C_nmn̄m̄[n, m, n̄, m̄]
+            end
+        end
+    end
+
+    # Local-nonlocal tensor contractions
+    ####################################
+
+    # Loop over sink position iₓ′
+    for iₓ′ in 1:N_points
+        # Laplace modes at sink time t and position iₓ′
+        v_sink_ck_iₓ′t = @view v_sink_ciₓk_t[:, iₓ′, :,]
+
+        # Pre-contractions
+        TO.@tensoropt (k, l) begin
+            vτΦ_charm_cαβl_iₓ′t₀p₁[a, α, β, l] :=
+                v_sink_ck_iₓ′t[a, k] * τΦ_charm_kαβl_t₀p₁[k, α, β, l]
+            vτΦ_charm_cαβl_iₓ′t₀p₂[a, α, β, l] :=
+                v_sink_ck_iₓ′t[a, k] * τΦ_charm_kαβl_t₀p₂[k, α, β, l]
+            τv_bw_light_kαβc[l, α, β, a] :=
+                τ_bw_light_kαβl_t[l, α, β, k] * conj(v_sink_ck_iₓ′t)[a, k]
+        end
+
+        # Disconnected part
+        #= TO.@tensoropt (l, k, l', k') begin
+            C_disc1_nn̄[n, n̄] :=
+                conj(v_sink_ck_iₓ′t)[a, k] * v_sink_ck_iₓ′t[a, k'] *
+                Γ_αβn[α, α', n] * τ_charm_αkβl_t[α', k', β, l'] *
+                conj(Φ_kl_t₀p₁)[l, l'] * Γbar_αβn[β, β', n̄] *
+                τ_bw_light_kαβl_t[l, β', α, k]
+            
+            C_disc2_mm̄[m, m̄] :=
+                conj(v_sink_ck_iₓ′t)[a, k] * v_sink_ck_iₓ′t[a, k'] *
+                Γ_αβn[α, α', m] * τ_charm_αkβl_t[α', k', β, l'] *
+                conj(Φ_kl_t₀p₂)[l, l'] * Γbar_αβn[β, β', m̄] *
+                τ_bw_light_kαβl_t[l, β', α, k]
+        end =#
+        TO.@tensoropt (l, k, l', k') begin
+            C_disc1_nn̄[n, n̄] :=
+                Γ_αβn[α, α', n] * vτΦ_charm_cαβl_iₓ′t₀p₁[a, α', β, l] * 
+                Γbar_αβn[β, β', n̄] *τv_bw_light_kαβc[l, β', α, a]
+            
+            C_disc2_mm̄[m, m̄] :=
+                Γ_αβn[α, α', m] * vτΦ_charm_cαβl_iₓ′t₀p₂[a, α', β, l] * 
+                Γbar_αβn[β, β', m̄] * τv_bw_light_kαβc[l, β', α, a]
+        end
+
+        # Connected part
+        #= TO.@tensoropt (l, k, l', k', l̃, k̃, l̃', k̃') begin
+            C_conn_nmn̄m̄[n, m, n̄, m̄] :=
+                conj(v_sink_ck_iₓ′t)[a, k] * v_sink_ck_iₓ′t[a, k'] *
+                Γ_αβn[α, α', n] * τ_charm_αkβl_t[α', k', β, l'] *
+                conj(Φ_kl_t₀p₂)[l, l'] * Γbar_αβn[β, β', m̄] *
+                τ_bw_light_kαβl_t[l, β', α_, k̃] *
+                conj(v_sink_ck_iₓ′t)[ã, k̃] * v_sink_ck_iₓ′t[ã, k̃'] *
+                Γ_αβn[α_, α_', m] * τ_charm_αkβl_t[α_', k̃', β_, l̃'] *
+                conj(Φ_kl_t₀p₁)[l̃, l̃'] * Γbar_αβn[β_, β_', n̄] *
+                τ_bw_light_kαβl_t[l̃, β_', α, k]
+        end =#
+        TO.@tensoropt (l, k, l', k', l̃, k̃, l̃', k̃') begin
+            C_conn_nmn̄m̄[n, m, n̄, m̄] :=
+                Γ_αβn[α, α', n] * vτΦ_charm_cαβl_iₓ′t₀p₂[a, α', β, l] * 
+                Γbar_αβn[β, β', m̄] * τv_bw_light_kαβc[l, β', α_, ã] * 
+                Γ_αβn[α_, α_', m] * vτΦ_charm_cαβl_iₓ′t₀p₁[ã, α_', β_, l̃] * 
+                Γbar_αβn[β_, β_', n̄] * τv_bw_light_kαβc[l̃, β_', α, a]
+        end
+
+        # Combine connected and disconnected part
+        TO.@tensoropt begin
+            C_nmn̄m̄[n, m, n̄, m̄] :=
+                C_disc1_nn̄[n, n̄]*C_disc2_mm̄[m, m̄] - C_conn_nmn̄m̄[n, m, n̄, m̄]
+        end
+
+        # Momentum projection
+        m2πix = -2π*im * 
+            x_sink_μiₓ_t[:, iₓ′]./parms.Nₖ
+        exp_ipx_arr = exp.(p_local_μiₚ' * m2πix)
+        for iₚ in eachindex(p_local_arr)
+            Cₗₙ_nmn̄m̄_iₚ = @view Cₗₙ_nmn̄m̄iₚ[:, :, :, :, iₚ]
+
+            exp_ipx = exp_ipx_arr[iₚ]
+            TO.@tensoropt begin
+                Cₗₙ_nmn̄m̄_iₚ[n, m, n̄, m̄] += exp_ipx * C_nmn̄m̄[n, m, n̄, m̄]
+            end
+        end
+    end
+
+    # Normalization
+    Cₙₗ_nmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
+    Cₗₙ_nmn̄m̄iₚ .*= prod(parms.Nₖ)/N_points
+
+    return Cₙₗ_nmn̄m̄iₚ, Cₗₙ_nmn̄m̄iₚ
 end
