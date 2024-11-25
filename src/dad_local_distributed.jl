@@ -151,7 +151,7 @@ function compute_contractions!(t₀)
         x_sink_arr = eachslice(x_sink_μiₓt, dims=3)
         v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)
 
-        # Select sink time `t₀`
+        # Select source time `t₀`
         x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
         v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
 

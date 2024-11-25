@@ -173,7 +173,7 @@ function compute_contractions!(t₀)
         τ_arr = eachslice(τ_αkβlt, dims=5)
         Φ_arr = eachslice(Φ_kltiₚ, dims=3)
 
-        # Select sink time `t₀`
+        # Select source time `t₀`
         Φ_kliₚ_t₀ = @view Φ_kltiₚ[:, :, i_t₀, :]
 
         # Function to compute contractions
