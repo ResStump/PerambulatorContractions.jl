@@ -189,7 +189,7 @@ combinations of them. This gives a vacuum expectation value of the form \
 <(c\_b^T CΓ₁ c\_c  ̄u\_d CΓ₂ d̄\_e^T)(x')
 (c̄\_b' C ΓbarC₁ c̄\_c'^T  d\_d'^T C ΓbarC₂ u\_e')(x)>` \
 (in position space) where `ΓbarCᵢ = Cγ₄ Γᵢ^† γ₄C`. This is computed for all combinations of
-the gamma matrices in `Γ₁_arr` and `Γ₂_arr`. The result is retuned as the array `C_tnmiₚ`
+the gamma matrices in `Γ₁_arr` and `Γ₂_arr`. The result is retuned as the array `C_nmiₚ`
 where the indices n, m, correspond to the indices of the Γ's in the expectation value
 in the given order.
 

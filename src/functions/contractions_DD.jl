@@ -158,7 +158,7 @@ expectation value of the form \
 n, m, n̄, m̄ correspond to the indices of the Γ's in the expectation value in the given order.
 
 The array `p_arr` contains the integer momenta the correlator is projected to
-(index iₚ in `C_tnmn̄m̄iₚ`).
+(index iₚ in `C_nmn̄m̄iₚ`).
 """
 function DD_local_contractons(
     τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray,
@@ -799,14 +799,14 @@ form (in position space) \
 `<(ūΓ₁c)(x₁) (d̄Γ₂c)(x₂) (c̄Γbar₃u c̄Γbar₄d)(x)>` \
 (nonlocal-local) and \
 `<(ūΓ₁c d̄Γ₂c)(x) (c̄Γbar₃u)(x₁) (c̄Γbar₄d)(x₂)>` \
-(local-nonlocal). The first one is returned as `Cₙₗ_nmn̄m̄iₚ` and the second one as
-`Cₗₙ_nmn̄m̄iₚ` where the indices n, m, n̄, m̄ correspond to the indices of the Γ's in the
+(local-nonlocal). The first one is returned as the array `Cₙₗ_nmn̄m̄iₚ` and the second one as
+the array `Cₗₙ_nmn̄m̄iₚ` where the indices n, m, n̄, m̄ correspond to the indices of the Γ's in the
 expectation values in the given order.
 
 The two momentum indices in `Iₚ_nonlocal` are used for the momentum projection in
 the nonlocal operator (positions x₁ and x₂). The array `p_local_arr` contains the integer
-momenta for the momentum projection in the local operator (index iₚ in `Cₙₗ_tnmn̄m̄iₚ` and
-`Cₗₙ_tnmn̄m̄iₚ`).
+momenta for the momentum projection in the local operator (index iₚ in `Cₙₗ_nmn̄m̄iₚ` and
+`Cₗₙ_nmn̄m̄iₚ`).
 """
 function DD_mixed_contractons(
     τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray,
