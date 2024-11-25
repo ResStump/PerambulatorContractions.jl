@@ -18,7 +18,8 @@ The gamma matrices `Γᵢ` are choose the following way: For the local operators
 matrices from `Γ_nonlocal_arr`. This is done for all possible combinations of them.
 
 These two expectation values are stored in `Cₙₗ_tnmn̄m̄iₚ` (nonlocal-local) and in
-`Cₗₙ_tnmn̄m̄iₚ` (local-nonlocal) where the indices n, m, n̄, m̄ correspond to the indices of the Γ's in the expectation values in the given order.
+`Cₗₙ_tnmn̄m̄iₚ` (local-nonlocal) where the indices n, m, n̄, m̄ correspond to the indices of
+the Γ's in the expectation values in the given order.
 
 The source time `t₀` is used to circularly shift the correlators such that it is at the
 origin. The two momentum indices in `Iₚ_nonlocal` are used for the momentum projection in
@@ -282,7 +283,7 @@ function DD_dad_nonlocal_local_mixed_contractons!(
 end
 
 @doc raw"""
-    DD_dad_nonlocal_local_mixed_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_local_arr::AbstractVector{<:AbstractMatrix}, Γ₂_local_arr::AbstractVector{<:AbstractMatrix}, Γ_nonlocal_arr::AbstractVector{<:AbstractMatrix}, Iₚ_nonlocal::AbstractVector{<:Integer}, p_local_arr::AbstractVector{<:AbstractVector}) -> (Cₙₗ_tnmn̄m̄iₚ::AbstractArray, Cₗₙ_tnmn̄m̄iₚ::AbstractArray)
+    DD_dad_nonlocal_local_mixed_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_local_arr::AbstractVector{<:AbstractMatrix}, Γ₂_local_arr::AbstractVector{<:AbstractMatrix}, Γ_nonlocal_arr::AbstractVector{<:AbstractMatrix}, Iₚ_nonlocal::AbstractVector{<:Integer}, p_local_arr::AbstractVector{<:AbstractVector}) -> (Cₙₗ_nmn̄m̄iₚ::AbstractArray, Cₗₙ_nmn̄m̄iₚ::AbstractArray)
 
 Contract the charm perambulator `τ_charm_αkβl_t`, the light perambulator `τ_light_αkβl_t`,
 the mode doublets `Φ_kliₚ_t` and `Φ_kliₚ_t₀` and the sparse Laplace modes in
@@ -301,13 +302,14 @@ The gamma matrices `Γᵢ` are choose the following way: For the local operators
 `Γ₁, Γ₃ ∈ Γ₁_local_arr` and `Γ₂ Γ₄ ∈ Γ₂_local_arr`. For the nonlocal operators we choose all
 matrices from `Γ_nonlocal_arr`. This is done for all possible combinations of them.
 
-The first one is returned as `Cₙₗ_tnmn̄m̄iₚ` (nonlocal-local) and the second one as
-`Cₗₙ_tnmn̄m̄iₚ` (local-nonlocal) where the indices n, m, n̄, m̄ correspond to the indices of the Γ's in the expectation values in the given order.
+The first one is returned as the array `Cₙₗ_nmn̄m̄iₚ` (nonlocal-local) and the second one as
+the array `Cₗₙ_nmn̄m̄iₚ` (local-nonlocal) where the indices n, m, n̄, m̄ correspond to the
+indices of the Γ's in the expectation values in the given order.
 
 The two momentum indices in `Iₚ_nonlocal` are used for the momentum projection in
 the nonlocal operator (positions x₁ and x₂). The array `p_local_arr` contains the integer
-momenta for the momentum projection in the local operator (index iₚ in `Cₙₗ_tnmn̄m̄iₚ` and
-`Cₗₙ_tnmn̄m̄iₚ`).
+momenta for the momentum projection in the local operator (index iₚ in `Cₙₗ_nmn̄m̄iₚ` and
+`Cₗₙ_nmn̄m̄iₚ`).
 """
 function DD_dad_nonlocal_local_mixed_contractons(
     τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, Φ_kliₚ_t::AbstractArray,
@@ -633,7 +635,7 @@ function DD_dad_local_mixed_contractons!(
                 γ[5][β, β'] * conj(τ_light_αkβl_t)[β', l, α', k] * γ[5][α', α]
         end
 
-        # Loop over sink position iₓ′ and source position iₓ
+        # Loop over source position iₓ
         for iₓ in 1:N_points
             # Laplace modes at src time t₀ and position iₓ
             v_src_ck_iₓt₀ = @view v_src_ciₓkt[:, iₓ, :, i_t₀]
@@ -650,7 +652,7 @@ function DD_dad_local_mixed_contractons!(
                     v_src_ck_iₓt₀[a, k] * τ_bw_light_kαβl_t[k, α, β, l]
             end
 
-            # Loop over sink position iₓ′ and source position iₓ
+            # Loop over sink position iₓ′
             for iₓ′ in 1:N_points
                 # Laplace modes at sink time t and position iₓ′
                 v_sink_ck_iₓ′t = @view v_sink_ciₓkt[:, iₓ′, :, iₜ]
@@ -826,4 +828,269 @@ function DD_dad_local_mixed_contractons!(
     C_dad_DD_tnmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
 
     return
+end
+
+@doc raw"""
+    DD_dad_local_mixed_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_dad_arr::AbstractVector{<:AbstractMatrix}, Γ₂_dad_arr::AbstractVector{<:AbstractMatrix}, Γ_DD_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> (C_DD_dad_nmn̄m̄iₚ::AbstractArray, C_dad_DD_nmn̄m̄iₚ::AbstractArray)
+
+Contract the charm perambulator `τ_charm_αkβl_t` and the light perambulator `τ_light_αkβl_t`
+and the sparse Laplace modes in `sparse_modes_arrays_tt₀` to get the mixed
+diquark-antidiquark-DD (dad-DD) local correlators and return them. These arrays are assumed
+to only contain data for a single sink time `t` and source time `t₀`. 
+The matrices in `Γ₁_dad_arr`, `Γ₂_dad_arr` and `Γ_DD_arr` are the matrices in
+the interpolating operators. This gives vacuum expectation values of the form
+(in position space) \
+`ε\_{a'b'c'} ε\_{a'd'e'} \
+<(ūΓ₁c d̄Γ₂c)(x') (c̄\_b' C ΓbarC₃ c̄\_c'^T  d\_d'^T C ΓbarC₄ u\_e')(x)>` \
+(DD-dad) and \
+`ε\_{abc} ε\_{ade} \
+<(c\_b^T CΓ₁ c\_c  ̄u\_d CΓ₂ d̄\_e^T)(x') (c̄Γbar₃u c̄Γbar₄d)(x)>` \
+(dad-DD) where `Γbarᵢ = γ₄ Γᵢ^† γ₄` and `ΓbarCᵢ = Cγ₄ Γᵢ^† γ₄C`. 
+The gamma matrices `Γᵢ` are choose the following way: For the dad operators we choose
+`Γ₁, Γ₃ ∈ Γ₁_dad_arr` and `Γ₂ Γ₄ ∈ Γ₂_dad_arr`. For the DD operators we choose all matrices
+from `Γ_DD_arr`. This is done for all possible combinations of them.
+
+These two expectation values are returned as the arrays `C_DD_dad_nmn̄m̄iₚ`
+(DD-diquark-antidiquark) and `C_dad_DD_nmn̄m̄iₚ` (diquark-antidiquark-DD) where the indices
+n, m, n̄, m̄ correspond to the indices of the Γ's in the expectation values in the given
+order.
+
+The array `p_arr` contains the integer momenta the correlator is projected to
+(index iₚ in `C_DD_dad_nmn̄m̄iₚ` and `C_dad_DD_nmn̄m̄iₚ`).
+"""
+function DD_dad_local_mixed_contractons(
+    τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray,
+    sparse_modes_arrays_tt₀::NTuple{4, AbstractArray},
+    Γ₁_dad_arr::AbstractVector{<:AbstractMatrix}, 
+    Γ₂_dad_arr::AbstractVector{<:AbstractMatrix},
+    Γ_DD_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}
+)
+    # Unpack sparse modes arrays
+    x_sink_μiₓ_t, x_src_μiₓ_t₀, v_sink_ciₓk_t, v_src_ciₓk_t₀ = sparse_modes_arrays_tt₀
+
+    # Number of points on spares lattice
+    N_points = size(x_sink_μiₓ_t, 2)
+
+    # Number of colors (could probably just use 3)
+    N_c = size(v_sink_ciₓk_t, 1)
+
+    # Number of gamma matrices
+    Nᵧ_dad_1 = length(Γ₁_dad_arr)
+    Nᵧ_dad_2 = length(Γ₂_dad_arr)
+    Nᵧ_DD = length(Γ_DD_arr)
+
+    # Convert vector of γ-matrices to contiguous array and compute relevant matrices
+    # for the DD operators
+    Γ_DD_αβn = stack(Γ_DD_arr)
+    TO.@tensoropt Γbar_DD_αβn[α, β, n] :=
+        γ[4][α, α'] * conj(Γ_DD_αβn)[β', α', n] * γ[4][β', β]
+    # and the dad operators
+    Γ₁_dad_αβn = stack(Γ₁_dad_arr)
+    Γ₂_dad_αβn = stack(Γ₂_dad_arr)
+    TO.@tensoropt CΓ₁_dad_αβn[α, β, n] := C[α, α'] * Γ₁_dad_αβn[α', β, n]
+    TO.@tensoropt CΓ₂_dad_αβn[α, β, n] := C[α, α'] * Γ₂_dad_αβn[α', β, n]
+    TO.@tensoropt CΓbarC₁_dad_αβn[α, β, n] :=
+        C[α, α'] * γ[2][α', α''] * conj(Γ₁_dad_αβn)[β', α'', n] * γ[2][β', β]
+    TO.@tensoropt CΓbarC₂_dad_αβn[α, β, n] :=
+        C[α, α'] * γ[2][α', α''] * conj(Γ₂_dad_αβn)[β', α'', n] * γ[2][β', β]
+
+    # Convert momentum array to contiguous array
+    p_μiₚ = stack(p_arr)
+
+    # Allocate correlator
+    C_DD_dad_nmn̄m̄iₚ = zeros(ComplexF64, Nᵧ_DD, Nᵧ_DD, Nᵧ_dad_1, Nᵧ_dad_2, length(p_arr))
+    C_dad_DD_nmn̄m̄iₚ = zeros(ComplexF64, Nᵧ_dad_1, Nᵧ_dad_2, Nᵧ_DD, Nᵧ_DD, length(p_arr))
+
+    # Light perambulator in backward direction
+    TO.@tensoropt (l, k) begin
+        τ_bw_light_kαβl_t[k, α, β, l] :=
+            γ[5][β, β'] * conj(τ_light_αkβl_t)[β', l, α', k] * γ[5][α', α]
+    end
+
+    # Loop over source position iₓ
+    for iₓ in 1:N_points
+        # Laplace modes at src time t₀ and position iₓ
+        v_src_ck_iₓt₀ = @view v_src_ciₓk_t₀[:, iₓ, :]
+
+        # Precontaction for smeared charm propagator
+        TO.@tensoropt (k, l) begin
+            τv_charm_kαβb[k, α, β, b] :=
+                τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
+        end
+
+        # Precontaction for smeared light propagator
+        TO.@tensoropt (k, l) begin
+            vτ_light_lαβa[l, α, β, a] :=
+                v_src_ck_iₓt₀[a, k] * τ_bw_light_kαβl_t[k, α, β, l]
+        end
+
+        # Loop over sink position iₓ′
+        for iₓ′ in 1:N_points
+            # Laplace modes at sink time t and position iₓ′
+            v_sink_ck_iₓ′t = @view v_sink_ciₓk_t[:, iₓ′, :]
+
+            # Smeared charm propagator (forward direction)
+            TO.@tensoropt (k, ) begin
+                D⁻¹_charm_αaβb_iₓ′iₓ[α, a, β, b] :=
+                    v_sink_ck_iₓ′t[a, k] * τv_charm_kαβb[k, α, β, b]
+            end
+            #= TO.@tensoropt (k, l) begin
+                D⁻¹_charm_αaβb_iₓ′iₓ_[α, a, β, b] :=
+                    v_sink_ck_iₓ′t[a, k] * 
+                    τ_charm_αkβl_t[α, k, β, l] * conj(v_src_ck_iₓt₀)[b, l]
+            end
+            @assert D⁻¹_charm_αaβb_iₓ′iₓ ≈ D⁻¹_charm_αaβb_iₓ′iₓ_ =#
+
+            # Smeared light propagator (backward direction)
+            TO.@tensoropt (l, ) begin
+                D⁻¹_light_αaβb_iₓiₓ′[α, a, β, b] :=
+                    vτ_light_lαβa[l, α, β, a] * conj(v_sink_ck_iₓ′t)[b, l]
+            end
+            #= TO.@tensoropt (k, l) begin
+                D⁻¹_light_αaβb_iₓiₓ′_[α, a, β, b] :=
+                    v_src_ck_iₓt₀[a, k] *
+                    τ_bw_light_kαβl_t[k, α, β, l] * conj(v_sink_ck_iₓ′t)[b, l]
+            end
+            @assert D⁻¹_light_αaβb_iₓiₓ′ ≈ D⁻¹_light_αaβb_iₓiₓ′_ =#
+
+            # DD-dad tensor contractions
+            ############################
+
+            # Pre-contractions
+            TO.@tensoropt begin
+                A1[β, β_', c', d', m] :=
+                    D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, c'] * Γ_DD_αβn[α_', α_, m] *
+                    D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b]
+                A2[β_', β', b', e', n, m̄] :=
+                    CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a] *
+                    Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', b']
+            end            
+
+            # Positive part
+            TO.@tensoropt begin
+                C_pos_bcdenmn̄m̄[b', c', d', e', n, m, n̄, m̄] :=
+                    CΓbarC₁_dad_αβn[β', β, n̄] *
+                    A1[β, β_', c', d', m] * A2[β_', β', b', e', n, m̄]
+            end
+
+            # Negative part
+            TO.@tensoropt begin
+                C_neg_bcdenmn̄m̄[b', c', d', e', n, m, n̄, m̄] :=
+                    CΓbarC₁_dad_αβn[β, β', n̄] *
+                    A1[β, β_', b', d', m] * A2[β_', β', c', e', n, m̄]
+            end
+
+            #= # Positive part
+            TO.@tensoropt begin
+                C_pos_bcdenmn̄m̄_old[b', c', d', e', n, m, n̄, m̄] :=
+                    Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', b'] *
+                    CΓbarC₁_dad_αβn[β', β, n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, c'] *
+                    Γ_DD_αβn[α_', α_, m] * D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b] *
+                    CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a]
+            end
+            @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old
+
+            # Negative part
+            TO.@tensoropt begin
+                C_neg_bcdenmn̄m̄_old[b', c', d', e', n, m, n̄, m̄] :=
+                    Γ_DD_αβn[α, α', n] * D⁻¹_charm_αaβb_iₓ′iₓ[α', a, β', c'] *
+                    CΓbarC₁_dad_αβn[β, β', n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[α_, b, β, b'] *
+                    Γ_DD_αβn[α_', α_, m] * D⁻¹_light_αaβb_iₓiₓ′[β_', d', α_', b] *
+                    CΓbarC₂_dad_αβn[β_', β_, m̄] * D⁻¹_light_αaβb_iₓiₓ′[β_, e', α, a]
+            end
+            @assert C_neg_bcdenmn̄m̄ ≈ C_neg_bcdenmn̄m̄_old =#
+
+            # Sum over epsilon tensors
+            TO.@tensoropt begin
+                C_nmn̄m̄[n, m, n̄, m̄] :=
+                    C_pos_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                    C_neg_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                    C_pos_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄] +
+                    C_neg_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄]
+            end
+
+            # Momentum projection
+            m2πiΔx = -2π*im * 
+                (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t₀[:, iₓ])./parms.Nₖ
+            exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
+            for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
+                C_DD_dad_nmn̄m̄_iₚ = @view C_DD_dad_nmn̄m̄iₚ[:, :, :, :, iₚ]
+                TO.@tensoropt begin
+                    C_DD_dad_nmn̄m̄_iₚ[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                end
+            end
+
+            # dad-DD tensor contractions
+            ############################
+
+            # Pre-contractions
+            TO.@tensoropt begin
+                A1[β, β_', c, d, n̄] :=
+                    D⁻¹_charm_αaβb_iₓ′iₓ[β, c, α_, a'] * Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d]
+                A2[β_', β', b, e, m, m̄] :=
+                    CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e] *
+                    Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', b, α', b']
+            end
+            
+            # Positive part
+            TO.@tensoropt begin
+                C_pos_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
+                    CΓ₁_dad_αβn[β', β, n] *
+                    A1[β, β_', c, d, n̄] * A2[β_', β', b, e, m, m̄]
+            end
+
+            # Negative part
+            TO.@tensoropt begin
+                C_neg_bcdenmn̄m̄[b, c, d, e, n, m, n̄, m̄] :=
+                    CΓ₁_dad_αβn[β, β', n] *
+                    A1[β, β_', b, d, n̄] * A2[β_', β', c, e, m, m̄]
+            end
+
+            #= # Positive part
+            TO.@tensoropt begin
+                C_pos_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
+                    Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', b, α', b'] *
+                    CΓ₁_dad_αβn[β', β, n] * D⁻¹_charm_αaβb_iₓ′iₓ[β, c, α_, a'] *
+                    Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d] *
+                    CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e]
+            end
+            @assert C_pos_bcdenmn̄m̄ ≈ C_pos_bcdenmn̄m̄_old
+
+            # Negative part
+            TO.@tensoropt begin
+                C_neg_bcdenmn̄m̄_old[b, c, d, e, n, m, n̄, m̄] :=
+                    Γbar_DD_αβn[α', α, m̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β', c, α', b'] *
+                    CΓ₁_dad_αβn[β, β', n] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, α_, a'] *
+                    Γbar_DD_αβn[α_, α_', n̄] * D⁻¹_light_αaβb_iₓiₓ′[α_', a', β_', d] *
+                    CΓ₂_dad_αβn[β_', β_, m] * D⁻¹_light_αaβb_iₓiₓ′[α, b', β_, e]
+            end
+            @assert C_neg_bcdenmn̄m̄ ≈ C_neg_bcdenmn̄m̄_old =#
+
+            # Sum over epsilon tensors
+            TO.@tensoropt begin
+                C_nmn̄m̄[n, m, n̄, m̄] :=
+                    C_pos_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                    C_neg_bcdenmn̄m̄[b, c, b, c, n, m, n̄, m̄] -
+                    C_pos_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄] +
+                    C_neg_bcdenmn̄m̄[c, b, b, c, n, m, n̄, m̄]
+            end
+
+            # Momentum projection
+            m2πiΔx = -2π*im * 
+                (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t₀[:, iₓ])./parms.Nₖ
+            exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
+            for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
+                C_dad_DD_nmn̄m̄_iₚ = @view C_dad_DD_nmn̄m̄iₚ[:, :, :, :, iₚ]
+                TO.@tensoropt begin
+                    C_dad_DD_nmn̄m̄_iₚ[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
+                end
+            end
+        end
+    end
+
+    # Normalization
+    C_DD_dad_nmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
+    C_dad_DD_nmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
+
+    return C_DD_dad_nmn̄m̄iₚ, C_dad_DD_nmn̄m̄iₚ
 end
