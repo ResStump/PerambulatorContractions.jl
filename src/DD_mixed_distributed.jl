@@ -198,6 +198,8 @@ function compute_contractions!(t₀)
                 p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
                 Ptot = p₁ + p₂
 
+                # Contraction for correlator of form 
+                # <O_nonlocal O_local^†> and <O_local O_nonlocal^†>
                 C_nl, C_ln = PC.DD_mixed_contractons(
                     τ_charm, τ, Φ, Φ_kliₚ_t₀,
                     (x_sink, x_src_μiₓ_t₀, v_sink, v_src_ciₓk_t₀), Γ_arr,
