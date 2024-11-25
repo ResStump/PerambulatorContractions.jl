@@ -949,7 +949,7 @@ function DD_mixed_contractons(
     # Loop over sink position iₓ′
     for iₓ′ in 1:N_points
         # Laplace modes at sink time t and position iₓ′
-        v_sink_ck_iₓ′t = @view v_sink_ciₓk_t[:, iₓ′, :,]
+        v_sink_ck_iₓ′t = @view v_sink_ciₓk_t[:, iₓ′, :]
 
         # Pre-contractions
         TO.@tensoropt (k, l) begin
