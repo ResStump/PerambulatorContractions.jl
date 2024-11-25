@@ -791,7 +791,7 @@ end
 
 Contract the charm perambulator `τ_charm_αkβl_t`, the light perambulator `τ_light_αkβl_t`,
 the mode doublets `Φ_kliₚ_t` and `Φ_kliₚ_t₀` and the sparse Laplace modes in
-`sparse_modes_arrays` to get the mixed DD correlators and return it.  These arrays are
+`sparse_modes_arrays_tt₀` to get the mixed DD correlators and return it.  These arrays are
 assumed to only contain data for a single sink time `t` and source time `t₀`.
 The matrices in `Γ_arr` are the matrices in the interpolating operators. The correlator is
 computed for all possible combinations of them. This gives vacuum expectation values of the
