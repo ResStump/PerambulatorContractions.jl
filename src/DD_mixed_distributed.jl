@@ -14,10 +14,6 @@
 
 import Distributed as D
 
-if D.nworkers() == 1
-    D.addprocs(Threads.nthreads())
-end
-
 D.@everywhere begin
     import MKL
     import LinearAlgebra as LA
@@ -26,14 +22,7 @@ D.@everywhere begin
     import DelimitedFiles as DF
     import FilePathsBase: /, Path
     import BenchmarkTools.@btime
-    #= import PerambulatorContractions as PC
-end =#
-    include("PerambulatorContractions.jl")
-    PC = PerambulatorContractions
-
-    # Add infile manually to arguments
-    #pushfirst!(ARGS, "-i", "run_dad-DD/input/mixed_16x8v1.toml")
-    pushfirst!(ARGS, "-i", "run_dad-DD/input/mixed_B450r000.toml")
+    import PerambulatorContractions as PC
 end
 
 # Initialize MPI
@@ -235,27 +224,6 @@ function compute_contractions!(t₀)
         end
     end
 
-    #= C_nonlocal_local_tnmn̄m̄iₚIₚ_copy = similar(C_nonlocal_local_tnmn̄m̄iₚIₚ)
-    C_local_nonlocal_tnmn̄m̄iₚIₚ_copy = similar(C_local_nonlocal_tnmn̄m̄iₚIₚ)
-    for (iₚ_nonlocal, Iₚ_nonlocal) in enumerate(Iₚ_nonlocal_arr)
-        p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
-        Ptot = p₁ + p₂
-        println("    Momenta for nonlocal operator: $p₁, $p₂")
-            # Contraction for correlator of form 
-            # <O_nonlocal O_local^†> and <O_local O_nonlocal^†>
-            C_nonlocal_local_tnmn̄m̄iₚ_Iₚ =
-                @view C_nonlocal_local_tnmn̄m̄iₚIₚ_copy[:, :, :, :, :, :, iₚ_nonlocal]
-            C_local_nonlocal_tnmn̄m̄iₚ_Iₚ =
-                @view C_local_nonlocal_tnmn̄m̄iₚIₚ_copy[:, :, :, :, :, :, iₚ_nonlocal]
-            PC.DD_mixed_contractons!(
-                C_nonlocal_local_tnmn̄m̄iₚ_Iₚ, C_local_nonlocal_tnmn̄m̄iₚ_Iₚ,
-                τ_charm_αkβlt, τ_αkβlt, Φ_kltiₚ, sparse_modes_arrays, Γ_arr, t₀,
-                Iₚ_nonlocal, [Ptot]
-            )
-    end
-    @assert C_nonlocal_local_tnmn̄m̄iₚIₚ ≈ C_nonlocal_local_tnmn̄m̄iₚIₚ_copy
-    @assert C_local_nonlocal_tnmn̄m̄iₚIₚ ≈ C_local_nonlocal_tnmn̄m̄iₚIₚ_copy =#
-
     println()
 end
 
@@ -296,7 +264,7 @@ function main()
                 
                 # Write Correlator
                 @time "    Write correlator" begin
-                    #write_correlator(n_cnfg, t₀)
+                    write_correlator(n_cnfg, t₀)
                 end
                 println()
             end
@@ -319,32 +287,5 @@ function main()
 end
 
 main()
-
-# %%
-
-#= import Plots
-import Statistics as Stats
-using LaTeXStrings
-
-n, m, n̄, m̄ = 1, 1, 1, 1
-p = [0, 0, 0]
-i_p = findfirst(p_ -> p_ == p, PC.parms.p_arr)
-
-correlator = correlators[:, :, :, n, m, n̄, m̄, i_p]
-
-function plot_correlator!(correlator; kargs...)
-    corr = vec(Stats.mean(real(correlator), dims=(2, 3)))
-    corr[corr.<=0] .= NaN
-
-    Plots.scatter!(0:PC.parms.Nₜ-1, corr; kargs...)
-
-    return
-end
-
-
-plot = Plots.plot(xlabel=L"t/a", ylabel=L"C(t)", yscale=:log10, minorticks=true)
-plot_correlator!(correlator, label="Correlator 1")
-display(plot) =#
-
 
 # %%
