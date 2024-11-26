@@ -229,18 +229,18 @@ function compute_contractions!(t₀)
             # Return as contiguous arrays
             return stack(C_nl_arr), stack(C_ln_arr)
         end
-    end
-          
-    # Distribute workload and fetch result
-    corr_arr = D.pmap(contractions, τ_charm_arr, τ_arr, Φ_arr, x_sink_arr, v_sink_arr)
+        
+        # Distribute workload and fetch result
+        corr_arr = D.pmap(contractions, τ_charm_arr, τ_arr, Φ_arr, x_sink_arr, v_sink_arr)
 
-    # Store correlator entries
-    for iₜ in 1:PC.parms.Nₜ
-        # Time index for storing correlator entry
-        i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
+        # Store correlator entries
+        for iₜ in 1:PC.parms.Nₜ
+            # Time index for storing correlator entry
+            i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
 
-        C_nonlocal_local_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][1]
-        C_local_nonlocal_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][2]
+            C_nonlocal_local_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][1]
+            C_local_nonlocal_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][2]
+        end
     end
 
     println()
