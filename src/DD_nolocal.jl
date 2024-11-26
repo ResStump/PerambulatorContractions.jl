@@ -70,12 +70,6 @@ for (Ptot_sq, p_sq_sum_max) in zip(Ptot_sq_arr, p_sq_sum_max_arr)
     append!(Iₚ_arr, Iₚ_arr_)
 end
 
-#= if PC.parms_toml["Correlator"]["method"] == "sparse"
-    # Get list of momentum indices that are actually used and the corresponding momenta
-    Iₚ_used_arr = collect(Set(stack(Iₚ_arr)))
-    p_used_arr = PC.parms.p_arr[Iₚ_used_arr]
-end =#
-
 
 # %%############
 # File Functions
