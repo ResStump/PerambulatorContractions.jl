@@ -68,7 +68,7 @@ Iₚ_nonlocal_arr = []
 Ptot_arr = Vector{Int}[]
 for (Ptot_sq, p_sq_sum_max) in zip(Ptot_sq_arr, p_sq_sum_max_arr)
     Iₚ_arr, Ptot_arr_ = PC.generate_momentum_pairs(Ptot_sq, p_sq_sum_max, ret_Ptot=true)
-    append!(Iₚ_nonlocal_arr, PC.generate_momentum_pairs(Ptot_sq, p_sq_sum_max))
+    append!(Iₚ_nonlocal_arr, Iₚ_arr)
     append!(Ptot_arr, Ptot_arr_)
 end
 
