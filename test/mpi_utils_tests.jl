@@ -1,4 +1,5 @@
 import MPI
+import LinearAlgebra as LA
 import PerambulatorContractions as PC
 import Test.@test
 
@@ -41,4 +42,17 @@ rank_cnfg_indices = reshape(rank_cnfg_indices, 1, 1, :)
 # Only test sent correlator on rank 0
 if myrank == 0
     @test all(correlator2 .== rank_cnfg_indices)
+end
+
+
+# Test mpi_broadcast
+f = (x, y, z) -> (LA.tr(x), LA.tr(y.^2), LA.tr(z.^3))
+arr1 = [rand(10, 10) for _ in 1:64]
+arr2 = [rand(15, 15) for _ in 1:64]
+arr3 = [rand(10, 10)]
+if myrank == 0
+    result = PC.mpi_broadcast(f, arr1, arr2, arr3)
+    @test result == f.(arr1, arr2, arr3)
+else
+    PC.mpi_broadcast(f)
 end
