@@ -16,6 +16,35 @@ function is_my_cnfg(i_cnfg)
 end
 
 @doc raw"""
+    cnfg_comm() -> cnfg_comm::MPI.comm, comm_number::Int, my_cnfgs::Vector{Int}
+
+Split the MPI global communicator `MPI.COMM_WORLD` into subcommunicators `cnfg_comm`
+consisting of `parms.N_ranks_per_cnfg` ranks which simultaneosly work on a configuration.
+These communicators contain consecutive ranks. Each communicator gets a number `comm_number`
+which is also returned. \
+Additionally, return the configurations this rank has to work on.
+"""
+function cnfg_comm()
+    comm = MPI.COMM_WORLD
+    myrank = MPI.Comm_rank(comm)
+    N_ranks = MPI.Comm_size(comm)
+
+    # New communicator (consecutive ranks grouped together)
+    cnfg_comm = MPI.Comm_split(comm, myrank÷parms.N_ranks_per_cnfg, myrank)
+
+    # Assign numbers to the communicators to get number of cnfgs per communicator
+    comm_number = myrank÷parms.N_ranks_per_cnfg
+    N_comm = N_ranks÷parms.N_ranks_per_cnfg
+    N_cnfg_per_comm_max = ceil(Int, parms.N_cnfg/N_comm)
+
+    # Configurations for this rank
+    my_cnfg_indices = (0:parms.N_cnfg-1) .÷ N_cnfg_per_comm_max .== comm_number
+    my_cnfgs = parms.cnfg_numbers[my_cnfg_indices]
+    
+    return cnfg_comm, comm_number, my_cnfgs
+end
+
+@doc raw"""
     broadcast_correlators!(correlator, cnfg_dim=3)
 
 Broadcast `correlator` to all ranks by assuming that each rank computed that part of
