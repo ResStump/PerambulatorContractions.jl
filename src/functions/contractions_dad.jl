@@ -59,7 +59,7 @@ function dad_local_contractons!(
 
     # Loop over all sink time indices (using multithreading)
     Threads.@threads for iₜ in 1:parms.Nₜ
-        # Time index for storing correlator entrie
+        # Time index for storing correlator entry
         i_Δt = mod1(iₜ-t₀, parms.Nₜ)
 
         # Perambulators at sink time t

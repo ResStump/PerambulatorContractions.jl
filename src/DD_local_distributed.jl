@@ -176,7 +176,7 @@ function compute_contractions!(t₀)
         # Store correlator entries
         if my_cnfg_rank == 0
             for iₜ in 1:PC.parms.Nₜ
-                # Time index for storing correlator entrie
+                # Time index for storing correlator entry
                 i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
                 
                 C_tnmn̄m̄iₚ[i_Δt, :, :, :, :, :] = corr[iₜ]
