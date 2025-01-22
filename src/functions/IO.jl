@@ -15,7 +15,7 @@ struct Parms
     result_dir
 
     # Configuration numbers and source times
-    cnfg_indices::Vector{Int}
+    cnfg_numbers::Vector{Int}
     tsrc_arr::Array{Int, 2}
 
     # Lattice size in time and space, and number of modes
@@ -30,6 +30,9 @@ struct Parms
     # Momentum indices and Momenta
     iₚ_arr::Vector{Int}
     p_arr::Vector{Vector{Int}}
+
+    # Number of ranks that symultaneously work on one configuration
+    N_ranks_per_cnfg::Int
 end
 
 parms = nothing
@@ -42,15 +45,26 @@ Read the parameters stored in the parameter file passed to the program with the 
 return the dictonary `parms_toml` and the Parms instance `parms`.
 """
 function read_parameters()
-    # Search for parameter file in arguments passed to program
-    parms_file_index = findfirst(arg -> arg == "-i", ARGS)
-    if isnothing(parms_file_index)
-        throw(ArgumentError("argument -i not provided to the program."))
-    elseif parms_file_index == size(ARGS)[1]
-        throw(ArgumentError("argument after -i not provided to the program."))
+    # Parse arguments
+    s = AP.ArgParseSettings()
+    AP.@add_arg_table s begin
+        "-i"
+            help = "Input file."
+            arg_type = String
+            required = true
+        "--nranks-per-cnfg"
+            help = "Number of ranks per configuration."
+            arg_type = Int
+            default = 1
+            required = false
     end
+    args = AP.parse_args(s)
 
-    parms_file = ARGS[parms_file_index+1]
+    # Input file path
+    parms_file = args["i"]
+
+    # Number of ranks per configuration
+    N_ranks_per_cnfg = args["nranks-per-cnfg"]
 
     # Read parameters from parameter file and store them in the `parms_toml`
     parms_toml_string = read(parms_file, String)
@@ -80,16 +94,16 @@ function read_parameters()
     Nₜ = parms_toml["Geometry"]["N_t"]
     Nₖ = parms_toml["Geometry"]["N_k"]
 
-    # Set `cnfg_indices`
+    # Set `cnfg_numbers`
     first_cnfg = parms_toml["Configurations"]["first"]
     step_cnfg = parms_toml["Configurations"]["step"]
     last_cnfg = parms_toml["Configurations"]["last"]
     N_cnfg = (last_cnfg - first_cnfg) ÷ step_cnfg + 1
-    cnfg_indices = Array(first_cnfg:step_cnfg:last_cnfg)
+    cnfg_numbers = Array(first_cnfg:step_cnfg:last_cnfg)
 
     # Find first source times for specified configurations
     tsrc_first = Array{Int, 1}(undef, N_cnfg)
-    for (i_cnfg, n_cnfg) in enumerate(cnfg_indices)
+    for (i_cnfg, n_cnfg) in enumerate(cnfg_numbers)
         idx = findfirst(n -> n == n_cnfg, tsrc_list[:, 1])
         tsrc_first[i_cnfg] = tsrc_list[idx, 2]
     end
@@ -120,8 +134,9 @@ function read_parameters()
 
     # Store all parameters
     global parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
-                         mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_indices,
-                         tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, iₚ_arr, p_arr)
+                         mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_numbers,
+                         tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, iₚ_arr, p_arr,
+                         N_ranks_per_cnfg)
     
     return
 end
