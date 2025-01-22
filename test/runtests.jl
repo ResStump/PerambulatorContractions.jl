@@ -2,9 +2,7 @@ import MPI
 import LinearAlgebra as LA
 import TensorOperations as TO
 import FilePathsBase: /, Path
-#= import PerambulatorContractions as PC =#
-include("../src/PerambulatorContractions.jl")
-PC = PerambulatorContractions
+import PerambulatorContractions as PC
 import Test:@test, @testset
 
 
