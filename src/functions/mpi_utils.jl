@@ -1,21 +1,4 @@
 @doc raw"""
-    is_my_cnfg(i_cnfg)
-
-Determine if the configuration with index `i_cnfg` has to be computed on this rank.
-
-The configuration are distributed among the ranks such that each rank processes consecutive
-configuration.
-"""
-function is_my_cnfg(i_cnfg)
-    myrank = MPI.Comm_rank(MPI.COMM_WORLD)
-    N_ranks = MPI.Comm_size(MPI.COMM_WORLD)
-
-    N_cnfg_per_rank = ceil(Int, parms.N_cnfg/N_ranks)
-    
-    return (i_cnfg-1)÷N_cnfg_per_rank == myrank
-end
-
-@doc raw"""
     cnfg_comm() -> cnfg_comm::MPI.comm, comm_number::Int, my_cnfgs::Vector{Int}
 
 Split the MPI global communicator `MPI.COMM_WORLD` into subcommunicators `cnfg_comm`
