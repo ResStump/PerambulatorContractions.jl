@@ -247,6 +247,9 @@ function main()
             end
         end
         println("\n")
+
+        # Run garbage collector
+        GC.gc()
     end
 
     # Wait until all ranks finished
