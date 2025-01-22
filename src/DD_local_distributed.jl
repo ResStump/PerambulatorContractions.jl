@@ -32,6 +32,7 @@ if myrank != 0
     redirect_stdout(devnull)
 end
 
+
 # %%###############
 # Global Parameters
 ###################
