@@ -3,14 +3,15 @@ PrecompileTools.@setup_workload begin
     parms_toml_string = ""
     perambulator_dir, perambulator_charm_dir, mode_doublets_dir = "", "", ""
     sparse_modes_dir, result_dir = "", ""
-    cnfg_indices, tsrc_arr = zeros(Int, 1), zeros(Int, 1, 1)
+    cnfg_numbers, tsrc_arr = zeros(Int, 1), zeros(Int, 1, 1)
     Nₜ, Nₖ, N_modes = 16, [8, 8, 8], 10
     N_cnfg, N_src = 1, 1
     p_arr = [[1, 0, 0]]
+    N_ranks_per_cnfg = 1
 
     parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
-                  mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_indices, tsrc_arr,
-                  Nₜ, Nₖ, N_modes, N_cnfg, N_src, [1], p_arr)
+                  mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_numbers, tsrc_arr,
+                  Nₜ, Nₖ, N_modes, N_cnfg, N_src, [1], p_arr, N_ranks_per_cnfg)
     
     # Pseudoscalar contraction
     N_points = 100
