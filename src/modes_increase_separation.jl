@@ -17,11 +17,6 @@ import HDF5
 import FilePathsBase: /, Path
 import BenchmarkTools.@btime
 import PerambulatorContractions as PC
-#= include("PerambulatorContractions.jl")
-PC = PerambulatorContractions =#
-
-# Add infile manually to arguments
-# pushfirst!(ARGS, "-i", "run_pseudoscalar/input/pseudoscalar_16x8v1.toml")
 
 # Initialize MPI
 MPI.Init()
@@ -41,6 +36,9 @@ end
 # Set global parameters
 PC.read_parameters()
 
+# Get my configuration numbers
+_, _, my_cnfgs = PC.cnfg_comm()
+
 
 # File paths
 sparse_modes_file(n_cnfg) = PC.parms.sparse_modes_dir/
@@ -55,7 +53,7 @@ sparse_modes_file_new(n_cnfg) =
 #################
 
 # Select valid cnfg number
-n_cnfg = PC.parms.cnfg_indices[1]
+n_cnfg = PC.parms.cnfg_numbers[1]
 
 # Sparse mode arrays
 sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
@@ -70,9 +68,9 @@ function main()
     # Computation
     #############
 
-    for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_indices)
+    for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_numbers)
         # Skip the cnfgs this rank doesn't have to compute
-        if !PC.is_my_cnfg(i_cnfg)
+        if n_cnfg ∉ my_cnfgs
             continue
         end
 
