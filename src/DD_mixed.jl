@@ -38,6 +38,9 @@ end
 # Set global parameters
 PC.read_parameters()
 
+# Get my configuration numbers
+_, _, my_cnfgs = PC.cnfg_comm()
+
 # Array of (monomial of) γ-matrices and their labels
 Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
 Nᵧ = length(Γ_arr)
@@ -137,7 +140,7 @@ end
 #################
 
 # Select valid cnfg number
-n_cnfg = PC.parms.cnfg_indices[1]
+n_cnfg = PC.parms.cnfg_numbers[1]
 
 # Perambulators, mode doublets and sparse modes arrays
 τ_αkβlt = PC.allocate_perambulator()
@@ -185,9 +188,9 @@ end
 
 function main()
     # Loop over all configurations
-    for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_indices)
+    for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_numbers)
         # Skip the cnfgs this rank doesn't have to compute
-        if !PC.is_my_cnfg(i_cnfg)
+        if n_cnfg ∉ my_cnfgs
             continue
         end
         if continuation_run && (n_cnfg in finished_cnfgs)
