@@ -29,6 +29,11 @@ function cnfg_comm()
     myrank = MPI.Comm_rank(comm)
     N_ranks = MPI.Comm_size(comm)
 
+    if mod(N_ranks, parms.N_ranks_per_cnfg) != 0
+        throw(ArgumentError("the number of ranks must be divisible by the number of "*
+                            "ranks per cnfg."))
+    end
+
     # New communicator (consecutive ranks grouped together)
     cnfg_comm = MPI.Comm_split(comm, myrank÷parms.N_ranks_per_cnfg, myrank)
 
@@ -129,7 +134,7 @@ function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.
                        root::Int=0)
     myrank = MPI.Comm_rank(comm)
     N_ranks = MPI.Comm_size(comm)
-nonroot_ranks = deleteat!(collect(0:N_ranks-1), root+1)
+    nonroot_ranks = deleteat!(collect(0:N_ranks-1), root+1)
 
     # Check input sizes on root
     if myrank == root
@@ -196,15 +201,15 @@ nonroot_ranks = deleteat!(collect(0:N_ranks-1), root+1)
     end
         
     # Distribute data
-rreq_arr = MPI.Request[]
+    rreq_arr = MPI.Request[]
     sreq_arr = MPI.Request[]
     MPI.Barrier(comm)
     if myrank != root
         # Receive on rank != root
         for idx in eachindex(vectors_loc)
             for i in eachindex(vectors_loc[idx])
-rreq = MPI.Irecv!(vectors_loc[idx][i], comm; source=root, tag=myrank)
-push!(rreq_arr, rreq)
+                rreq = MPI.Irecv!(vectors_loc[idx][i], comm; source=root, tag=myrank)
+                push!(rreq_arr, rreq)
             end
         end
     else
@@ -214,12 +219,12 @@ push!(rreq_arr, rreq)
             last_r = min((rank+1)*N_elem_per_rank_max, N_elem)
             for v in vectors
                 if length(v) == 1
-sreq = MPI.Isend(v[1], comm; dest=rank, tag=rank)
-push!(sreq_arr, sreq)
+                    sreq = MPI.Isend(v[1], comm; dest=rank, tag=rank)
+                    push!(sreq_arr, sreq)
                 else
                     for a in v[first_r:last_r]
-sreq = MPI.Isend(a, comm; dest=rank, tag=rank)
-push!(sreq_arr, sreq)
+                        sreq = MPI.Isend(a, comm; dest=rank, tag=rank)
+                        push!(sreq_arr, sreq)
                     end
                 end
             end
@@ -234,7 +239,7 @@ push!(sreq_arr, sreq)
             end
         end
     end
-MPI.Waitall(vcat(rreq_arr, sreq_arr))
+    MPI.Waitall(vcat(rreq_arr, sreq_arr))
     MPI.Barrier(comm)
 
     # Broadcast
