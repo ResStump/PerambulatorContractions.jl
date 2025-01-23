@@ -1,12 +1,15 @@
 # %%########################################################################################
 # dad_local.jl
 #
-# Compute local diquark-antidiquark (dad) correlators from perambulators and sparse modes.
+# Compute local diquark-antidiquark (dad) correlators from perambulators and sparse modes
+# where the contractions are done in parallel using MPI.jl.
 #
 # Usage:
-#   dad_local.jl -i <parms file>
+#   dad_local.jl -i <parms file> --nranks-per-cnfg <n>
 #
-# where <parms file> is a toml file containing the required parameters.
+# where <parms file> is a toml file containing the required parameters and <n> is the number
+# of ranks that simultaneously work on one configuration. If --nranks-per-cnfg is not
+# provided, the default value is 1.
 #
 ############################################################################################
 
@@ -18,6 +21,15 @@ import DelimitedFiles as DF
 import FilePathsBase: /, Path
 import BenchmarkTools.@btime
 import PerambulatorContractions as PC
+#= include("PerambulatorContractions.jl")
+PC = PerambulatorContractions =#
+
+empty!(ARGS)
+# Add infile manually to arguments
+#pushfirst!(ARGS, "-i", "run_dad-DD/input/local_16x8v1.toml")
+pushfirst!(ARGS, "-i", "run_dad-DD/input/local_B450r000.toml")
+# Add --nranks-per-cnfg manually to arguments
+push!(ARGS, "--nranks-per-cnfg", "2")
 
 # Initialize MPI
 MPI.Init()
@@ -37,8 +49,9 @@ end
 # Set global parameters
 PC.read_parameters()
 
-# Get my configuration numbers
-_, _, my_cnfgs = PC.cnfg_comm()
+# Split communicators
+cnfg_comm, comm_number, my_cnfgs = PC.cnfg_comm()
+my_cnfg_rank = MPI.Comm_rank(cnfg_comm)
 
 # Set which momenta should be used
 if PC.parms_toml["Momenta"]["p"] == "all"
@@ -56,7 +69,7 @@ Nᵧ_2 = length(Γ₂_arr)
 Γ₂_dad_labels = ["Cgamma_5"]
 
 # Continuation run?
-finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
+finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(comm_number).txt"
 continuation_run = PC.parms_toml["Various"]["continuation_run"]
 if continuation_run
     finished_cnfgs = vec(DF.readdlm(string(finished_cnfgs_file), '\n', Int))
@@ -110,19 +123,26 @@ end
 # Allocate Arrays
 #################
 
-# Select valid cnfg number
-n_cnfg = PC.parms.cnfg_numbers[1]
+if my_cnfg_rank == 0
+    # Select valid cnfg number
+    n_cnfg = PC.parms.cnfg_numbers[1]
 
-# Perambulators and sparse mode arrays
-τ_αkβlt = PC.allocate_perambulator()
-τ_charm_αkβlt = PC.allocate_perambulator()
-sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
+    # Perambulators and sparse mode arrays
+    τ_αkβlt = PC.allocate_perambulator()
+    τ_charm_αkβlt = PC.allocate_perambulator()
+    sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
-# Correlator and its labels
-correlator_size = (PC.parms.Nₜ, Nᵧ_1, Nᵧ_2, length(p_arr))
-C_tnmiₚ = Array{ComplexF64}(undef, correlator_size)
-# Reversed order in Julia
-labels = ["Gamma2", "Gamma1", "t"]
+    # Correlator and its labels
+    correlator_size = (PC.parms.Nₜ, Nᵧ_1, Nᵧ_2, length(p_arr))
+    C_tnmiₚ = Array{ComplexF64}(undef, correlator_size)
+    # Reversed order in Julia
+    labels = ["Gamma2", "Gamma1", "t"]
+end
+
+#= # Temp correlator for plotting
+correlators_I0 = zeros(
+    ComplexF64, PC.parms.Nₜ, PC.parms.N_src, PC.parms.N_cnfg, length(p_arr)
+) =#
 
 
 # %%#########
@@ -130,12 +150,61 @@ labels = ["Gamma2", "Gamma1", "t"]
 #############
 
 function compute_contractions!(t₀)
-    # Compute correlator entries
-    @time "      dad_local_contractons!" begin
-        PC.dad_local_contractons!(
-            C_tnmiₚ, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ₁_arr, Γ₂_arr, t₀, p_arr
-        )
+    @time "      dad_local_contractons" begin
+        if my_cnfg_rank == 0
+            # Index for source time `t₀`
+            i_t₀ = t₀+1
+
+            # Unpack sparse modes arrays
+            x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+
+            # Convert arrays to vectors of arrays in the time axis
+            τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
+            τ_arr = eachslice(τ_αkβlt, dims=5)
+            x_sink_arr = eachslice(x_sink_μiₓt, dims=3)
+            v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)
+
+            # Select source time `t₀`
+            x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
+            v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+        end
+
+        # Function to compute contraction
+        contraction = (τ_charm, τ, x_sink, x_src, v_sink, v_src) -> begin
+            PC.dad_local_contractons(
+                τ_charm, τ, (x_sink, x_src, v_sink, v_src),
+                Γ₁_arr, Γ₂_arr, p_arr
+            )
+        end
+
+        # Distribute workload and compute contraction
+        if my_cnfg_rank == 0
+            corr = PC.mpi_broadcast(contraction, τ_charm_arr, τ_arr, x_sink_arr,
+                                    [x_src_μiₓ_t₀], v_sink_arr, [v_src_ciₓk_t₀],
+                                    comm=cnfg_comm)
+        else
+            PC.mpi_broadcast(contraction, comm=cnfg_comm)
+        end
+
+        # Store correlator entries
+        if my_cnfg_rank == 0
+            for iₜ in 1:PC.parms.Nₜ
+                # Time index for storing correlator entry
+                i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
+                
+                C_tnmiₚ[i_Δt, :, :, :] = corr[iₜ]
+            end
+        end
     end
+
+    #= if my_cnfg_rank == 0
+        C_tnmiₚ_copy = similar(C_tnmiₚ)
+        PC.dad_local_contractons!(
+            C_tnmiₚ_copy, τ_charm_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ₁_arr, Γ₂_arr, t₀, p_arr
+        )
+        @assert C_tnmiₚ ≈ C_tnmiₚ_copy
+    end =#
+
     println()
 end
 
@@ -153,8 +222,10 @@ function main()
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
-            @time "  Read sparse modes" begin
-                PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+            if my_cnfg_rank == 0
+                @time "  Read sparse modes" begin
+                    PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+                end
             end
             println()
 
@@ -163,24 +234,36 @@ function main()
                 println("  Source: $i_src of $(PC.parms.N_src)")
 
                 @time "    Read perambulators" begin
-                    PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
-                    PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
-                                          τ_charm_αkβlt)
+                    if my_cnfg_rank == 0
+                        PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
+                        PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
+                                              τ_charm_αkβlt)
+                    end
                 end
                 println()
 
                 compute_contractions!(t₀)
+
+                #= correlators_I0[:, i_src, i_cnfg, :] = 1/3*(
+                    C_tnmiₚ[:, 1, 1, :] +
+                    C_tnmiₚ[:, 2, 1, :] +
+                    C_tnmiₚ[:, 3, 1, :]
+                    ) =#
                 
                 # Write Correlator
-                @time "    Write correlator" begin
-                    write_correlator(n_cnfg, t₀)
+                if my_cnfg_rank == 0
+                    @time "    Write correlator" begin
+                        #write_correlator(n_cnfg, t₀)
+                    end
                 end
                 println()
             end
 
             # Update finished_cnfgs
             push!(finished_cnfgs, n_cnfg)
-            DF.writedlm(string(finished_cnfgs_file), finished_cnfgs, '\n')
+            if my_cnfg_rank == 0
+                DF.writedlm(string(finished_cnfgs_file), finished_cnfgs, '\n')
+            end
         end
         println("\n")
 
@@ -192,11 +275,40 @@ function main()
     MPI.Barrier(comm)
 
     # Remove finished_cnfgs file
-    rm(finished_cnfgs_file, force=true)
+    if my_cnfg_rank == 0
+        rm(finished_cnfgs_file, force=true)
+    end
 
     println("Program finished successfully.")
 end
 
 main()
+
+# %%
+
+#= import Plots
+import Statistics as Stats
+using LaTeXStrings
+
+p = [0, 0, 0]
+i_p = findfirst(p_ -> p_ == p, p_arr)
+
+correlator = correlators_I0[:, :, :, i_p]
+
+function plot_correlator!(correlator; kargs...)
+    corr = vec(Stats.mean(real(correlator), dims=(2, 3)))
+    corr[corr.<=0] .= NaN
+
+    Plots.scatter!(0:PC.parms.Nₜ-1, corr; kargs...)
+
+    return
+end
+
+# PC.write_correlator("dad_local_B450_r000.hdf5", correlator)
+
+plot = Plots.plot(xlabel=L"t/a", ylabel=L"C(t)", yscale=:log10, minorticks=true)
+plot_correlator!(correlator, label="Correlator 1")
+display(plot) =#
+
 
 # %%
