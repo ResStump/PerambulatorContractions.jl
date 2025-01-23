@@ -2,28 +2,25 @@
 # DD_mixed_distributed.jl
 #
 # Compute mixed local-nonlocal DD correlators from perambulators, mode doublets and
-# sparse modes where the contractions are done in parallel on each MPI rank using
-# Distributed.jl.
+# sparse modes where the contractions are done in parallel using MPI.jl.
 #
 # Usage:
-#   DD_mixed_distributed.jl -i <parms file>
+#   DD_mixed_distributed.jl -i <parms file> --nranks-per-cnfg <n>
 #
-# where <parms file> is a toml file containing the required parameters.
+# where <parms file> is a toml file containing the required parameters and <n> is the number
+# of ranks that simultaneously work on one configuration. If --nranks-per-cnfg is not
+# provided, the default value is 1.
 #
 ############################################################################################
 
-import Distributed as D
-
-D.@everywhere begin
-    import MKL
-    import LinearAlgebra as LA
-    import MPI
-    import HDF5
-    import DelimitedFiles as DF
-    import FilePathsBase: /, Path
-    import BenchmarkTools.@btime
-    import PerambulatorContractions as PC
-end
+import MKL
+import LinearAlgebra as LA
+import MPI
+import HDF5
+import DelimitedFiles as DF
+import FilePathsBase: /, Path
+import BenchmarkTools.@btime
+import PerambulatorContractions as PC
 
 # Initialize MPI
 MPI.Init()
@@ -43,19 +40,17 @@ end
 # Set global parameters
 PC.read_parameters()
 
-D.@everywhere begin
-    # Broadcast global parameters
-    PC.parms = $(PC.parms)
-    PC.parms_toml = $(PC.parms_toml)
+# Split communicators
+cnfg_comm, comm_number, my_cnfgs = PC.cnfg_comm()
+my_cnfg_rank = MPI.Comm_rank(cnfg_comm)
 
-    # Array of (monomial of) γ-matrices and their labels
-    Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
-    Nᵧ = length(Γ_arr)
-    Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "-i1"]
-end
+# Array of (monomial of) γ-matrices and their labels
+Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
+Nᵧ = length(Γ_arr)
+Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "-i1"]
 
 # Continuation run?
-finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(myrank).txt"
+finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(comm_number).txt"
 continuation_run = PC.parms_toml["Various"]["continuation_run"]
 if continuation_run
     finished_cnfgs = vec(DF.readdlm(string(finished_cnfgs_file), '\n', Int))
@@ -147,22 +142,24 @@ end
 # Allocate Arrays
 #################
 
-# Select valid cnfg number
-n_cnfg = PC.parms.cnfg_indices[1]
+if my_cnfg_rank == 0
+    # Select valid cnfg number
+    n_cnfg = PC.parms.cnfg_numbers[1]
 
-# Perambulators, mode doublets and sparse modes arrays
-τ_αkβlt = PC.allocate_perambulator()
-τ_charm_αkβlt = PC.allocate_perambulator()
-Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
-sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
+    # Perambulators, mode doublets and sparse modes arrays
+    τ_αkβlt = PC.allocate_perambulator()
+    τ_charm_αkβlt = PC.allocate_perambulator()
+    Φ_kltiₚ = PC.allocate_mode_doublets(mode_doublets_file(n_cnfg))
+    sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
-# Correlator and its labels
-# (for momentum of local operator always choose Ptot -> index always iₚ=1)
-correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, 1, length(Iₚ_nonlocal_arr))
-C_nonlocal_local_tnmn̄m̄iₚIₚ = Array{ComplexF64}(undef, correlator_size)
-C_local_nonlocal_tnmn̄m̄iₚIₚ = Array{ComplexF64}(undef, correlator_size)
-# Reversed order in Julia
-labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
+    # Correlator and its labels
+    # (for momentum of local operator always choose Ptot -> index always iₚ=1)
+    correlator_size = (PC.parms.Nₜ, Nᵧ, Nᵧ, Nᵧ, Nᵧ, 1, length(Iₚ_nonlocal_arr))
+    C_nonlocal_local_tnmn̄m̄iₚIₚ = Array{ComplexF64}(undef, correlator_size)
+    C_local_nonlocal_tnmn̄m̄iₚIₚ = Array{ComplexF64}(undef, correlator_size)
+    # Reversed order in Julia
+    labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
+end
 
 
 # %%#########
@@ -171,26 +168,28 @@ labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
 
 function compute_contractions!(t₀)
     @time "      DD mixed contractons" begin
-        # Index for source time `t₀`
-        i_t₀ = t₀+1
+        if my_cnfg_rank == 0
+            # Index for source time `t₀`
+            i_t₀ = t₀+1
 
-        # Unpack sparse modes arrays
-        x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+            # Unpack sparse modes arrays
+            x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
-        # Convert arrays to vectors of arrays in the time axis
-        τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
-        τ_arr = eachslice(τ_αkβlt, dims=5)
-        Φ_arr = eachslice(Φ_kltiₚ, dims=3)
-        x_sink_arr = eachslice(x_sink_μiₓt, dims=3)
-        v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)
+            # Convert arrays to vectors of arrays in the time axis
+            τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
+            τ_arr = eachslice(τ_αkβlt, dims=5)
+            Φ_arr = eachslice(Φ_kltiₚ, dims=3)
+            x_sink_arr = eachslice(x_sink_μiₓt, dims=3)
+            v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)
 
-        # Select source time `t₀`
-        Φ_kliₚ_t₀ = @view Φ_kltiₚ[:, :, i_t₀, :]
-        x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
-        v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+            # Select source time `t₀`
+            Φ_kliₚ_t₀ = @view Φ_kltiₚ[:, :, i_t₀, :]
+            x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
+            v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+        end
 
         # Function to compute contractions
-        contractions = (τ_charm, τ, Φ, x_sink, v_sink) -> begin
+        contractions = (τ_charm, τ, Φ, Φ_t₀, x_sink, x_src, v_sink, v_src) -> begin
             C_nl_arr = []
             C_ln_arr = []
 
@@ -201,8 +200,7 @@ function compute_contractions!(t₀)
                 # Contraction for correlator of form 
                 # <O_nonlocal O_local^†> and <O_local O_nonlocal^†>
                 C_nl, C_ln = PC.DD_mixed_contractons(
-                    τ_charm, τ, Φ, Φ_kliₚ_t₀,
-                    (x_sink, x_src_μiₓ_t₀, v_sink, v_src_ciₓk_t₀), Γ_arr,
+                    τ_charm, τ, Φ, Φ_t₀, (x_sink, x_src, v_sink, v_src), Γ_arr,
                     Iₚ_nonlocal, [Ptot]
                 )
                 push!(C_nl_arr, C_nl)
@@ -212,17 +210,25 @@ function compute_contractions!(t₀)
             # Return as contiguous arrays
             return stack(C_nl_arr), stack(C_ln_arr)
         end
-          
-        # Distribute workload and fetch result
-        corr_arr = D.pmap(contractions, τ_charm_arr, τ_arr, Φ_arr, x_sink_arr, v_sink_arr)
+
+        # Distribute workload and compute contractions
+        if my_cnfg_rank == 0
+            corr_arr = PC.mpi_broadcast(contractions, τ_charm_arr, τ_arr, Φ_arr, [Φ_kliₚ_t₀],
+                                    x_sink_arr, [x_src_μiₓ_t₀], v_sink_arr, [v_src_ciₓk_t₀],
+                                    comm=cnfg_comm)
+        else
+            PC.mpi_broadcast(contractions, comm=cnfg_comm)
+        end
 
         # Store correlator entries
-        for iₜ in 1:PC.parms.Nₜ
-            # Time index for storing correlator entry
-            i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
-
-            C_nonlocal_local_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][1]
-            C_local_nonlocal_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][2]
+        if my_cnfg_rank == 0
+            for iₜ in 1:PC.parms.Nₜ
+                # Time index for storing correlator entry
+                i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
+    
+                C_nonlocal_local_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][1]
+                C_local_nonlocal_tnmn̄m̄iₚIₚ[i_Δt, :, :, :, :, :, :] = corr_arr[iₜ][2]
+            end
         end
     end
 
@@ -232,9 +238,9 @@ end
 
 function main()
     # Loop over all configurations
-    for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_indices)
+    for (i_cnfg, n_cnfg) in enumerate(PC.parms.cnfg_numbers)
         # Skip the cnfgs this rank doesn't have to compute
-        if !PC.is_my_cnfg(i_cnfg)
+        if n_cnfg ∉ my_cnfgs
             continue
         end
         if continuation_run && (n_cnfg in finished_cnfgs)
@@ -243,11 +249,13 @@ function main()
 
         println("Configuration $n_cnfg")
         @time "Finished configuration $n_cnfg" begin
-            @time "  Read mode doublets" begin
-                PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
-            end
-            @time "  Read sparse modes" begin
-                PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+            if my_cnfg_rank == 0
+                @time "  Read mode doublets" begin
+                    PC.read_mode_doublets!(mode_doublets_file(n_cnfg), Φ_kltiₚ)
+                end
+                @time "  Read sparse modes" begin
+                    PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+                end
             end
             println()
 
@@ -255,37 +263,47 @@ function main()
             for (i_src, t₀) in enumerate(PC.parms.tsrc_arr[i_cnfg, :])
                 println("  Source: $i_src of $(PC.parms.N_src)")
 
-                @time "    Read perambulators" begin
-                    PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
-                    PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
-                                          τ_charm_αkβlt)
+                if my_cnfg_rank == 0
+                    @time "    Read perambulators" begin
+                        PC.read_perambulator!(perambulator_file(n_cnfg, t₀), τ_αkβlt)
+                        PC.read_perambulator!(perambulator_charm_file(n_cnfg, t₀),
+                                              τ_charm_αkβlt)
+                    end
                 end
                 println()
 
                 compute_contractions!(t₀)
                 
                 # Write Correlator
-                @time "    Write correlator" begin
-                    write_correlator(n_cnfg, t₀)
+                if my_cnfg_rank == 0
+                    @time "    Write correlator" begin
+                        write_correlator(n_cnfg, t₀)
+                    end
                 end
                 println()
             end
 
             # Update finished_cnfgs
             push!(finished_cnfgs, n_cnfg)
-            DF.writedlm(string(finished_cnfgs_file), finished_cnfgs, '\n')
+            if my_cnfg_rank == 0
+                DF.writedlm(string(finished_cnfgs_file), finished_cnfgs, '\n')
+            end
         end
         println("\n")
 
         # Run garbage collector
-        D.@everywhere GC.gc()
+        GC.gc()
     end
 
     # Wait until all ranks finished
     MPI.Barrier(comm)
 
     # Remove finished_cnfgs file
-    rm(finished_cnfgs_file, force=true)
+    if my_cnfg_rank == 0
+        rm(finished_cnfgs_file, force=true)
+    end
+
+    println("Program finished successfully.")
 end
 
 main()
