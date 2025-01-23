@@ -213,9 +213,10 @@ function compute_contractions!(t₀)
 
         # Distribute workload and compute contractions
         if my_cnfg_rank == 0
-            corr_arr = PC.mpi_broadcast(contractions, τ_charm_arr, τ_arr, Φ_arr, [Φ_kliₚ_t₀],
-                                    x_sink_arr, [x_src_μiₓ_t₀], v_sink_arr, [v_src_ciₓk_t₀],
-                                    comm=cnfg_comm)
+            corr_arr = PC.mpi_broadcast(
+                contractions, τ_charm_arr, τ_arr, Φ_arr, [Φ_kliₚ_t₀],
+                x_sink_arr, [x_src_μiₓ_t₀], v_sink_arr, [v_src_ciₓk_t₀], comm=cnfg_comm
+            )
         else
             PC.mpi_broadcast(contractions, comm=cnfg_comm)
         end
