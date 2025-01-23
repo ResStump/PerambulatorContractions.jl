@@ -229,6 +229,7 @@ function main()
         rm(finished_cnfgs_file, force=true)
     end
 
+    println("Program finished successfully.")
 end
 
 main()

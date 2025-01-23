@@ -93,6 +93,8 @@ function main()
         end
         println("\n")
     end
+
+    println("Program finished successfully.")
 end
 
 main()

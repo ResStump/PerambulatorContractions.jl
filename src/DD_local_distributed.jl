@@ -254,6 +254,8 @@ function main()
     if my_cnfg_rank == 0
         rm(finished_cnfgs_file, force=true)
     end
+
+    println("Program finished successfully.")
 end
 
 main()

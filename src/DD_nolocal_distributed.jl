@@ -264,6 +264,8 @@ function main()
 
     # Remove finished_cnfgs file
     rm(finished_cnfgs_file, force=true)
+
+    println("Program finished successfully.")
 end
 
 main()
