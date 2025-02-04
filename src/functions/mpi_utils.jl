@@ -95,7 +95,7 @@ function send_correlator_to_root!(correlator, cnfg_dim=3)
 end
 
 @doc raw"""
-    mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.COMM_WORLD, root::Int=0)
+    mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.COMM_WORLD, root::Int=0, log_prefix="mpi_broadcast: ")
 
 Broadcast the function `f` over the vectors of arrays `vectors` using MPI on the 
 communicator `comm`. The arrays in `vectors` are distributed among the available ranks which
@@ -114,7 +114,7 @@ The output of `f` can be of arbitrary type, therefore the gather communication i
 using serialization which might be slow for large arrays.
 """
 function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.COMM_WORLD,
-                       root::Int=0)
+                       root::Int=0, log_prefix="mpi_broadcast: ")
     myrank = MPI.Comm_rank(comm)
     N_ranks = MPI.Comm_size(comm)
     nonroot_ranks = deleteat!(collect(0:N_ranks-1), root+1)
@@ -162,71 +162,73 @@ function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.
         sizes = nothing
     end
 
-    v_lengths, types, sizes = MPI.bcast((v_lengths, types, sizes), comm, root=root)
-    N_elem = maximum(v_lengths)
+    @time "$(log_prefix)Distribute data" begin
+        v_lengths, types, sizes = MPI.bcast((v_lengths, types, sizes), comm, root=root)
+        N_elem = maximum(v_lengths)
 
-    # Distribution of work among ranks (each rank processes consecutive elements)
-    N_elem_per_rank_max = ceil(Int, N_elem/N_ranks)
-    first = myrank*N_elem_per_rank_max + 1
-    last = min((myrank+1)*N_elem_per_rank_max, N_elem)
-    N_elem_loc = last - first + 1
-    v_lengths_loc = min.(v_lengths, N_elem_loc) # Length of the local vectors
+        # Distribution of work among ranks (each rank processes consecutive elements)
+        N_elem_per_rank_max = ceil(Int, N_elem/N_ranks)
+        first = myrank*N_elem_per_rank_max + 1
+        last = min((myrank+1)*N_elem_per_rank_max, N_elem)
+        N_elem_loc = last - first + 1
+        v_lengths_loc = min.(v_lengths, N_elem_loc) # Length of the local vectors
 
-    # Allocate memory for local vectors
-    vectors_loc = [Vector{Array{type}}(undef, v_len)
-                   for (type, v_len) in zip(types, v_lengths_loc)]
-    if myrank != root
-        for idx in eachindex(vectors_loc)
-            for i in eachindex(vectors_loc[idx])
-                vectors_loc[idx][i] = Array{types[idx]}(undef, sizes[idx])
-            end
-        end
-    end
-        
-    # Distribute data
-    rreq_arr = MPI.Request[]
-    sreq_arr = MPI.Request[]
-    MPI.Barrier(comm)
-    if myrank != root
-        # Receive on rank != root
-        for idx in eachindex(vectors_loc)
-            for i in eachindex(vectors_loc[idx])
-                rreq = MPI.Irecv!(vectors_loc[idx][i], comm; source=root, tag=myrank)
-                push!(rreq_arr, rreq)
-            end
-        end
-    else
-        # Send from root
-        for rank in nonroot_ranks
-            first_r = rank*N_elem_per_rank_max + 1
-            last_r = min((rank+1)*N_elem_per_rank_max, N_elem)
-            for v in vectors
-                if length(v) == 1
-                    sreq = MPI.Isend(v[1], comm; dest=rank, tag=rank)
-                    push!(sreq_arr, sreq)
-                else
-                    for a in v[first_r:last_r]
-                        sreq = MPI.Isend(a, comm; dest=rank, tag=rank)
-                        push!(sreq_arr, sreq)
-                    end
+        # Allocate memory for local vectors
+        vectors_loc = [Vector{Array{type}}(undef, v_len)
+                    for (type, v_len) in zip(types, v_lengths_loc)]
+        if myrank != root
+            for idx in eachindex(vectors_loc)
+                for i in eachindex(vectors_loc[idx])
+                    vectors_loc[idx][i] = Array{types[idx]}(undef, sizes[idx])
                 end
             end
         end
+            
+        # Distribute data
+        rreq_arr = MPI.Request[]
+        sreq_arr = MPI.Request[]
+        MPI.Barrier(comm)
+        if myrank != root
+            # Receive on rank != root
+            for idx in eachindex(vectors_loc)
+                for i in eachindex(vectors_loc[idx])
+                    rreq = MPI.Irecv!(vectors_loc[idx][i], comm; source=root, tag=myrank)
+                    push!(rreq_arr, rreq)
+                end
+            end
+        else
+            # Send from root
+            for rank in nonroot_ranks
+                first_r = rank*N_elem_per_rank_max + 1
+                last_r = min((rank+1)*N_elem_per_rank_max, N_elem)
+                for v in vectors
+                    if length(v) == 1
+                        sreq = MPI.Isend(v[1], comm; dest=rank, tag=rank)
+                        push!(sreq_arr, sreq)
+                    else
+                        for a in v[first_r:last_r]
+                            sreq = MPI.Isend(a, comm; dest=rank, tag=rank)
+                            push!(sreq_arr, sreq)
+                        end
+                    end
+                end
+            end
 
-        # Data on root
-        for idx in eachindex(vectors)
-            if length(vectors[idx]) == 1
-                vectors_loc[idx][1] = vectors[idx][1]
-            else
-                vectors_loc[idx][:] = vectors[idx][first:last]
+            # Data on root
+            for idx in eachindex(vectors)
+                if length(vectors[idx]) == 1
+                    vectors_loc[idx][1] = vectors[idx][1]
+                else
+                    vectors_loc[idx][:] = vectors[idx][first:last]
+                end
             end
         end
+        MPI.Waitall(vcat(rreq_arr, sreq_arr))
+        MPI.Barrier(comm)
     end
-    MPI.Waitall(vcat(rreq_arr, sreq_arr))
-    MPI.Barrier(comm)
 
     # Broadcast
-    result_loc = f.(vectors_loc...)
+    @time "$(log_prefix)Computation" result_loc = f.(vectors_loc...)
 
     # Allocate result array on root
     if myrank == root
@@ -238,17 +240,19 @@ function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.
     end
 
     # Gather results on root
-    MPI.Barrier(comm)
-    if myrank != root
-        MPI.send(result_loc, comm; dest=root, tag=myrank)
-    else
-        for rank in nonroot_ranks
-            first_r = rank*N_elem_per_rank_max + 1
-            last_r = min((rank+1)*N_elem_per_rank_max, N_elem)
-            result[first_r:last_r] = MPI.recv(comm; source=rank, tag=rank)
+    @time "$(log_prefix)Waiting for other ranks to finish" MPI.Barrier(comm)
+    @time "$(log_prefix)Gather results" begin
+        if myrank != root
+            MPI.send(result_loc, comm; dest=root, tag=myrank)
+        else
+            for rank in nonroot_ranks
+                first_r = rank*N_elem_per_rank_max + 1
+                last_r = min((rank+1)*N_elem_per_rank_max, N_elem)
+                result[first_r:last_r] = MPI.recv(comm; source=rank, tag=rank)
+            end
         end
+        MPI.Barrier(comm)
     end
-    MPI.Barrier(comm)
 
     if myrank == root
         return result
