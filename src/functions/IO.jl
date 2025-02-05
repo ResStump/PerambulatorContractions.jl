@@ -244,7 +244,7 @@ function read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
 
     # Read mode doublets and set the derivative index to 1 (no derivative)
     file = HDF5.h5open(string(mode_doublets_file), "r")
-    Φ_tmp_kltiₚ = read(file["mode_doublets"])[1,:,:,:,:]
+    Φ_tmp_kltiₚ = file["mode_doublets"][1,:,:,:,:]
     close(file)
 
     # Permute dimensions to match index convention of perambulator
