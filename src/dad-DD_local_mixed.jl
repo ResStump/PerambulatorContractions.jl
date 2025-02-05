@@ -73,6 +73,13 @@ else
     finished_cnfgs = []
 end
 
+# Shape of correlator
+direction = PC.parms_toml["Correlator shape"]["direction"]
+nₜ = PC.parms_toml["Correlator shape"]["n_timeslices"]
+if direction != "full" && 2*nₜ > PC.parms.Nₜ
+    throw(ArgumentError("Invalid number of timeslices: $nₜ"))
+end
+
 
 # %%############
 # File Functions
@@ -97,11 +104,25 @@ function write_correlator(n_cnfg, t₀)
     # Write correlators with dimension labels
     for (iₚ, p) in enumerate(p_arr)
         p_str = "p"*join(p, ",")
-        file["Correlators/$p_str/DD-dad"] = C_DD_dad_tnmn̄m̄iₚ[:, :, :, :, :, iₚ]
+
+        if direction == "full"
+            # Remove forward/backward dimension
+            @views begin
+                file["Correlators/$p_str/DD-dad"] = C_DD_dad_tdnmn̄m̄iₚ[:, 1, :, :, :, :, iₚ]
+                file["Correlators/$p_str/dad-DD"] = C_dad_DD_tdnmn̄m̄iₚ[:, 1, :, :, :, :, iₚ]
+            end
+        else
+            @views begin
+                file["Correlators/$p_str/DD-dad"] = C_DD_dad_tdnmn̄m̄iₚ[:, :, :, :, :, :, iₚ]
+                file["Correlators/$p_str/dad-DD"] = C_dad_DD_tdnmn̄m̄iₚ[:, :, :, :, :, :, iₚ]
+            end
+        end
         HDF5.attrs(file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels_DD_dad
-        file["Correlators/$p_str/dad-DD"] = C_dad_DD_tnmn̄m̄iₚ[:, :, :, :, :, iₚ]
         HDF5.attrs(file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels_dad_DD
     end
+
+    # Write correlator shape
+    file["Correlator shape"] = direction
 
     # Write spin structure
     file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
@@ -132,18 +153,30 @@ if my_cnfg_rank == 0
     τ_charm_αkβlt = PC.allocate_perambulator()
     sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
 
-    # Correlator and its labels
-    C_DD_dad_tnmn̄m̄iₚ = Array{ComplexF64}(
-        undef,
-        PC.parms.Nₜ, Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, length(p_arr)
-    )
-    C_dad_DD_tnmn̄m̄iₚ = Array{ComplexF64}(
-        undef,
-        PC.parms.Nₜ, Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, length(p_arr)
-    )
-    # Reversed order in Julia
-    labels_DD_dad = ["Gamma2 bar C", "Gamma1 bar C", "Gamma2", "Gamma1", "t"]
-    labels_dad_DD = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
+    # Correlator and its labels (order of labels reversed in Julia)
+    if direction in ["forward", "backward"]
+        correlator_DD_dad_size = (nₜ, 1, Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, length(p_arr))
+        correlator_dad_DD_size = (nₜ, 1, Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, length(p_arr))
+    elseif direction == "forward/backward"
+        correlator_DD_dad_size = (nₜ, 2, Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, length(p_arr))
+        correlator_dad_DD_size = (nₜ, 2, Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, length(p_arr))
+    elseif direction == "full"
+        correlator_DD_dad_size = 
+            (PC.parms.Nₜ, 1, Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, length(p_arr))
+        correlator_dad_DD_size = 
+            (PC.parms.Nₜ, 1, Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, length(p_arr))
+    else
+        throw(ArgumentError("Invalid direction: $direction"))
+    end
+    C_DD_dad_tdnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_DD_dad_size)
+    C_dad_DD_tdnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_dad_DD_size)
+    if direction == "full"
+        labels_DD_dad = ["Gamma2 bar C", "Gamma1 bar C", "Gamma2", "Gamma1", "t"]
+        labels_dad_DD = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
+    else
+        labels_DD_dad = ["Gamma2 bar C", "Gamma1 bar C", "Gamma2", "Gamma1", "fwd/bwd", "t"]
+        labels_dad_DD = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "fwd/bwd", "t"]
+    end
 end
 
 
@@ -157,14 +190,26 @@ function compute_contractions!(t₀)
             # Index for source time `t₀`
             i_t₀ = t₀+1
 
+            # Time range to be computed
+            if direction == "forward"
+                iₜ_range = i_t₀ .+ (0:nₜ-1)
+            elseif direction == "backward"
+                iₜ_range = i_t₀ .+ (1-nₜ:0)
+            elseif direction == "forward/backward"
+                iₜ_range = i_t₀ .+ (1-nₜ:nₜ-1)
+            else
+                iₜ_range = i_t₀ .+ (0:PC.parms.Nₜ-1)
+            end
+            iₜ_range = mod1.(iₜ_range, PC.parms.Nₜ)
+
             # Unpack sparse modes arrays
             x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
             # Convert arrays to vectors of arrays in the time axis
-            τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)
-            τ_arr = eachslice(τ_αkβlt, dims=5)
-            x_sink_arr = eachslice(x_sink_μiₓt, dims=3)
-            v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)
+            τ_charm_arr = eachslice(τ_charm_αkβlt, dims=5)[iₜ_range]
+            τ_arr = eachslice(τ_αkβlt, dims=5)[iₜ_range]
+            x_sink_arr = eachslice(x_sink_μiₓt, dims=3)[iₜ_range]
+            v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)[iₜ_range]
 
             # Select source time `t₀`
             x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
@@ -173,29 +218,51 @@ function compute_contractions!(t₀)
 
         # Function to compute contraction
         contraction = (τ_charm, τ, x_sink, x_src, v_sink, v_src) -> begin
-            PC.DD_dad_local_mixed_contractons(
+            C = PC.DD_dad_local_mixed_contractons(
                 τ_charm, τ, (x_sink, x_src, v_sink, v_src),
                 Γ₁_dad_arr, Γ₂_dad_arr, Γ_DD_arr, p_arr
             )
+            
+            # Run garbage collector for "young" objects
+            GC.gc(false)
+
+            return C
         end
 
         # Distribute workload and compute contraction
         if my_cnfg_rank == 0
             corr = PC.mpi_broadcast(contraction, τ_charm_arr, τ_arr, x_sink_arr,
                                     [x_src_μiₓ_t₀], v_sink_arr, [v_src_ciₓk_t₀],
-                                    comm=cnfg_comm)
+                                    comm=cnfg_comm, log_prefix="      ")
         else
             PC.mpi_broadcast(contraction, comm=cnfg_comm)
         end
 
         # Store correlator entries
         if my_cnfg_rank == 0
-            for iₜ in 1:PC.parms.Nₜ
-                # Time index for storing correlator entry
-                i_Δt = mod1(iₜ-t₀, PC.parms.Nₜ)
-                
-                C_DD_dad_tnmn̄m̄iₚ[i_Δt, :, :, :, :, :] = corr[iₜ][1]
-                C_dad_DD_tnmn̄m̄iₚ[i_Δt, :, :, :, :, :] = corr[iₜ][2]
+            if direction == "forward/backward"
+                # Backward direction
+                for iₜ in 1:nₜ-1
+                    C_DD_dad_tdnmn̄m̄iₚ[iₜ, 2, :, :, :, :, :] = corr[iₜ][1]
+                    C_dad_DD_tdnmn̄m̄iₚ[iₜ, 2, :, :, :, :, :] = corr[iₜ][2]
+                end
+
+                # Source time
+                C_DD_dad_tdnmn̄m̄iₚ[nₜ, 2, :, :, :, :, :] = corr[nₜ][1]
+                C_dad_DD_tdnmn̄m̄iₚ[nₜ, 2, :, :, :, :, :] = corr[nₜ][2]
+                C_DD_dad_tdnmn̄m̄iₚ[1, 1, :, :, :, :, :] = corr[nₜ][1]
+                C_dad_DD_tdnmn̄m̄iₚ[1, 1, :, :, :, :, :] = corr[nₜ][2]
+
+                # Forward direction
+                for iₜ in 2:nₜ
+                    C_DD_dad_tdnmn̄m̄iₚ[iₜ, 1, :, :, :, :, :] = corr[iₜ+nₜ-1][1]
+                    C_dad_DD_tdnmn̄m̄iₚ[iₜ, 1, :, :, :, :, :] = corr[iₜ+nₜ-1][2]
+                end
+            else
+                for (iₜ, corr_t) in enumerate(corr)    
+                    C_DD_dad_tdnmn̄m̄iₚ[iₜ, 1, :, :, :, :, :] = corr_t[1]
+                    C_dad_DD_tdnmn̄m̄iₚ[iₜ, 1, :, :, :, :, :] = corr_t[2]
+                end
             end
         end
     end
@@ -255,9 +322,6 @@ function main()
             end
         end
         println("\n")
-
-        # Run garbage collector
-        GC.gc()
     end
 
     # Wait until all ranks finished
