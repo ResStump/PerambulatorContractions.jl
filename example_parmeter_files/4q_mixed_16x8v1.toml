@@ -13,6 +13,10 @@ result_dir = "results"
 N_t     = 16
 N_k     = [8, 8, 8]
 
+["Correlator shape"]
+direction       = "full"    # "forward", "backward", "forward/backward" or "full"
+n_timeslices    = 8
+
 ["Configurations"]
 first   = 1
 last    = 10
