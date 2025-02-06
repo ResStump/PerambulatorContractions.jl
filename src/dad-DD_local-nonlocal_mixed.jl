@@ -372,6 +372,10 @@ function main()
                         write_correlator(n_cnfg, t₀)
                     end
                 end
+
+                # Run garbage collector (fully)
+                GC.gc()
+
                 println()
             end
 
