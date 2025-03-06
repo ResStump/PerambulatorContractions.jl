@@ -64,6 +64,7 @@ end
 finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(comm_number).txt"
 continuation_run = PC.parms_toml["Various"]["continuation_run"]
 if continuation_run
+    println("Continuation run\n")
     finished_cnfgs = vec(DF.readdlm(string(finished_cnfgs_file), '\n', Int))
 else
     finished_cnfgs = []
@@ -203,7 +204,7 @@ if my_cnfg_rank == 0
     end
 
     # Correlator and its labels for writing it (order of labels reversed in Julia)
-    # (initialize correlators with zeros to use MPI.Reduce! for the communication)
+    # (initialize correlators with zeros to use MPI.Reduce for the communication)
     if corr_matrix_type == "full"
         correlator_size = 
             (PC.parms.Nₜ, Nᵧ, Nᵧ, PC.parms.N_src, PC.parms.N_cnfg, length(p_arr))
@@ -213,6 +214,28 @@ if my_cnfg_rank == 0
         correlator_size = (PC.parms.Nₜ, Nᵧ, PC.parms.N_src, PC.parms.N_cnfg, length(p_arr))
         C_tnt₀ciₚ = zeros(ComplexF64, correlator_size)
         labels = ["config", "source", "Gamma", "t"]
+    end
+
+    # Read correlator file if continuation run
+    if continuation_run
+        file = HDF5.h5open(string(corr_tmp_file_path()))
+
+        # Loop over all momentuma
+        @time "Read tmp file" begin
+            for (iₚ, p) in enumerate(p_arr)
+                p_str = join(p, ",")
+        
+                # Write correlator with dimension labels
+                if corr_matrix_type == "full"
+                    C_tnn̄t₀ciₚ[:, :, :, :, :, iₚ] = read(file["Correlators/p$p_str"])
+                elseif corr_matrix_type == "diag"
+                    C_tnt₀ciₚ[:, :, :, :, iₚ] = read(file["Correlators/p$p_str"])
+                end
+            end
+        end
+        println()
+
+        close(file)
     end
 end
 
