@@ -1,337 +1,267 @@
-###########################
-# Pseudoscalar Contractions
-###########################
-
 @doc raw"""
-    pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, t₀::Integer)
-    pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, t₀::Integer)
+    meson_connected_contractions(τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Φ_kliₚ_t::AbstractArray, Φ_kliₚ_t₀::AbstractArray, Γ_arr::AbstractArray, iₚ::Integer, full_corr_matrix::Bool; neg_sign::Bool=true)
 
-Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` to get the pseudoscalar correlator
-for zero momentum where `τ₁_αkβlt` is used to propagate in forward and `τ₂_αkβlt` in
-backward direction. This gives a vacuum expectation value of the form \
-`<(ψ₂γ₅ψ₁)(x) (ψ₁γ₅ψ₂)(0)>` \
-(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
+Contract the perambulators `τ₁_αkβl_t` and `τ₂_αkβl_t` and the mode doublets `Φ_kliₚ_t` and
+`Φ_kliₚ_t₀` to get connected meson correlators where `τ₁_αkβlt` is used to propagate in
+forward and `τ₂_αkβlt` in backward direction. These arrays are assumed to only contain data
+for a single sink time `t` and source time `t₀`. The matrices in `Γ_arr` are the matrices in
+the interpolating operators. If `full_corr_matrix == true` compute the full
+correlator matrix \
+`C_tnn̄ = <(Ψbar₂ Γ_n Ψ₁)(t, p) (Ψ₁ Γbar_n̄ Ψbar₂)(t₀, p)>` \
+of them. Otherwise, only compute the diagonal matrix entries.
 
-If only one perambulator `τ_αkβlt` is given, it is used to propagete in
-both directions.
+The momentum index `iₚ` is used for the momentum projection.
 
-The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
-that the source time is at the origin.
+If `neg_sign=true` (default) multiply the correlator matrix with `-1` (convention).
 """
-function pseudoscalar_contraction_p0!(
-    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, t₀::Integer
+function meson_connected_contractions(
+    τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
+    Φ_kliₚ_t::AbstractArray, Φ_kliₚ_t₀::AbstractArray,
+    Γ_arr::AbstractArray{<:AbstractMatrix}, iₚ::Integer, full_corr_matrix::Bool;
+    neg_sign::Bool=true
 )
-    # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
-        # perambulators at sink (index `iₜ`)
-        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :, iₜ]
-        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
+    # Number of gamma matrices
+    Nᵧ = length(Γ_arr)
 
-        # Tensor contraction
-        TO.@tensor begin
-            C = τ₁_αkβl_t[α, k, β, l] * conj(τ₂_αkβl_t[α, k, β, l])
+    # Compute Γbar matrices and multiply with γ₅
+    γ₅Γ_αβn = stack([γ[5]] .* Γ_arr)
+    Γbarγ₅_αβn = stack([γ[4]] .* adjoint.(Γ_arr) .* [γ[4]*γ[5]])
+
+    # Initialize ITensors
+    #####################
+
+    # Indices
+    N_modes = size(τ₁_αkβlt, 2)
+    α = IT.Index(4, "α")
+    β = IT.Index(4, "β")
+    k = IT.Index(N_modes, "k")
+    l = IT.Index(N_modes, "l")
+    n = IT.Index(Nᵧ, "n")
+    n̄ = IT.Index(Nᵧ, "nbar")
+
+    # Mode doublets at sink
+    Φ_tiₚ = IT.itensor(@view(Φ_kliₚ_t[:, :, iₚ]), k, k')
+
+    # Mode doublet at source   
+    Φ_t₀iₚ = IT.itensor(@view(Φ_kliₚ_t₀[:, :, iₚ]), l, l')
+
+    # Perambulators
+    τ₁_t = IT.itensor(τ₁_αkβlt, α', k', β', l')
+    τ₂_t = IT.itensor(τ₂_αkβlt, α, k, β, l)
+
+    # Tensor contractions
+    #####################
+
+    # Precontractions
+    τ₁Φτ₂Φ = (τ₁_t * conj(Φ_t₀iₚ)) * (conj(τ₂_t) * Φ_tiₚ)
+
+    if full_corr_matrix
+        γ₅Γ_n = IT.itensor(γ₅Γ_αβn, α, α', n)
+        Γbarγ₅_n̄ = IT.itensor(Γbarγ₅_αβn, β', β, n̄)
+
+        C_nn̄ = τ₁Φτ₂Φ * Γbarγ₅_n̄ * γ₅Γ_n
+
+        # Sign flip flip
+        if neg_sign
+            C_nn̄ = -C_nn̄
+        end
+        return IT.array(C_nn̄, n, n̄)
+    else
+        # Initialize array for diagonal elements
+        C_n = Array{ComplexF64}(undef, Nᵧ)
+
+        # Loop over all gamma matrices
+        for n in 1:Nᵧ
+            γ₅Γ_n = IT.itensor(@view(γ₅Γ_αβn[:, :, n]), α, α')
+            Γbarγ₅_n = IT.itensor(@view(Γbarγ₅_αβn[:, :, n]), β', β)
+
+            C_n[n] = IT.scalar(τ₁Φτ₂Φ * γ₅Γ_n * Γbarγ₅_n)
         end
 
-        # Circularly shift time such that t₀=0
-        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
-    end
-
-    return
-end
-pseudoscalar_contraction_p0!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, t₀::Integer) =
-    pseudoscalar_contraction_p0!(Cₜ, τ_αkβlt, τ_αkβlt, t₀)
-
-@doc raw"""
-    pseudoscalar_contraction!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Φ_kltiₚ::AbstractArray, t₀::Integer, iₚ::Integer)
-    pseudoscalar_contraction!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, Φ_kltiₚ::AbstractArray, t₀::Integer, iₚ::Integer)
-
-Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the mode doublets `Φ_kltiₚ` to get
-the pseudoscalar correlator where `τ₁_αkβlt` is used to propagate in forward and `τ₂_αkβlt`
-in backward direction. This gives a vacuum expectation value of the form \
-`<(ψ₂γ₅ψ₁)(x) (ψ₁γ₅ψ₂)(0)>` \
-(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
-
-If only one perambulator `τ_αkβlt` is given, it is used to propagete
-in both directions.
-
-The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
-that the source time is at the origin. The index `iₚ` sets the momentum that is used from
-the mode doublets.
-"""
-function pseudoscalar_contraction!(
-    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
-    Φ_kltiₚ::AbstractArray, t₀::Integer, iₚ::Integer
-)
-    # Index for source time `t₀`
-    i_t₀ = t₀+1
-
-    # Mode doublet at source time `t₀`
-    Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
-
-    # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
-        # Mode doublet and perambulators at sink time t (index `iₜ`)
-        Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
-        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
-        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
-        
-        # Tensor contraction
-        TO.@tensor order=(l, α, β, l', k, k') begin
-            C = Φ_kl_tiₚ[k, k'] * τ₁_αkβl_t[α, k', β, l'] *
-                conj(Φ_kl_t₀iₚ[l, l']) * conj(τ₂_αkβl_t[α, k, β, l])
+        # Sign flip flip
+        if neg_sign
+            C_n .= .-C_n
         end
-
-        # Circularly shift time such that t₀=0
-        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
+        return C_n
     end
-
-    return
 end
-pseudoscalar_contraction!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
-                          Φ_kltiₚ::AbstractArray, t₀::Integer, iₚ::Integer) = 
-    pseudoscalar_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
 
 @doc raw"""
-    pseudoscalar_sparse_contraction!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::Vector)
-    pseudoscalar_sparse_contraction!(Cₜ::AbstractVector, τ_αkβlt::AbstractArray, sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::AbstractVector)
+    generate_meson_connected_contract_func(Γ::AbstractMatrix, Γbar::AbstractMatrix) -> contract::Function
 
-Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the sparse Laplace modes stored in
-`sparse_modes_arrays` to get the pseudoscalar correlator where `τ₁_αkβlt` is used to
-propagate in forward and `τ₂_αkβlt` in backward direction. This gives a vacuum expectation
-value of the form \
-`<(ψ₂γ₅ψ₁)(x) (ψ₁γ₅ψ₂)(0)>` \
-(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
-
-If only one perambulator
-`τ_αkβlt` is given, it is used to propagete in both directions.
-
-The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
-that the source time is at the origin. The array `p` is the integer momentum that is used
-for the momentum projection of the correlator.
+Generate a meson contraction functions of the form \
+`C(x', x) = Γ_αα' * D₁⁻¹(x', x)_α'aβ'b * Γbar_β'β * D₂⁻¹(x', x)_βbαa` \
+which takes the propagators `D₁⁻¹` and `D₂⁻¹` (with size (4, 3, 4, 3)) at fixed `x'`, `x`
+and returns `C(x', x)`.
 """
-function pseudoscalar_sparse_contraction!(
-    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
-    sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::AbstractVector
-)
-    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+function generate_meson_connected_contract_func(Γ::AbstractMatrix, Γbar::AbstractMatrix)
+    Symbolics.@variables D₁⁻¹[1:4, 1:3, 1:4, 1:3], D₂⁻¹[1:4, 1:3, 1:4, 1:3]
 
-    # Index for source time `t₀`
-    i_t₀ = t₀+1
+    a = IT.Index(3, "a")
+    b = IT.Index(3, "b")
+    α = IT.Index(4, "α")
+    β = IT.Index(4, "β")
+    a = IT.Index(3, "a")
+    b = IT.Index(3, "b")
     
+    Γ_ = IT.itensor(Γ, α, α')
+    Γbar_ = IT.itensor(Γbar, β', β)
+    D₁⁻¹_ = IT.itensor(collect(D₁⁻¹), α', a, β', b)
+    D₂⁻¹_ = IT.itensor(collect(D₂⁻¹), β, b, α, a)
+
+    C = IT.scalar((Γ_ * D₁⁻¹_) * (Γbar_ * D₂⁻¹_))
+
+    contract_real = eval(Symbolics.build_function(real(C), D₁⁻¹, D₂⁻¹))
+    contract_imag = eval(Symbolics.build_function(imag(C), D₁⁻¹, D₂⁻¹))
+    contract = (D₁⁻¹, D₂⁻¹) -> contract_real(D₁⁻¹, D₂⁻¹) + im*contract_imag(D₁⁻¹, D₂⁻¹)
+
+    return contract
+end
+
+@doc raw"""
+    meson_connected_sparse_contractions(τ₁_αkβl_t::AbstractArray, τ₂_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, p_arr::AbstractVector{<:AbstractVector}, contract_arr::AbstractVecOrMat{<:Function}, full_corr_matrix::Bool; neg_sign::Bool=true) -> corr_matrix
+
+Contract the perambulators `τ₁_αkβl_t` and `τ₂_αkβl_t` and the sparse Laplace modes in
+`sparse_modes_arrays_tt₀` to get connected meson correlators where `τ₁_αkβlt` is used to
+propagate in forward and `τ₂_αkβlt` in backward direction.
+These arrays are assumed to only contain data for a single sink time `t` and source time
+`t₀`. The resulting correlator matrix is of the form \
+`C_tnn̄iₚ = <(Ψbar₂ Γ_n Ψ₁)(t, p) (Ψ₁ Γbar_n̄ Ψbar₂)(t₀, p)>` \
+The array `p_arr` contains the integer momenta the correlator is projected to. It
+corresponds to the last index in `C_tnn̄iₚ`. The array `contract_arr` contains the contraction
+functions for the fermion propagators for a fixed source/sink position and time.
+Generate these functions with the function `generate_meson_connected_contract_func`. 
+If `full_corr_matrix == true` compute the full correlator matrix `C_tnn̄iₚ`. In that case
+`contract_arr` must be a square matrix where every entry corresponds to on paire
+`(Γ_n, Γbar_n̄)`. Otherwise, only compute the diagonal matrix entries. Then, `contract_arr`
+must be a vector.
+
+If `neg_sign=true` (default) multiply the correlator matrix with `-1` (convention).
+"""
+function meson_connected_sparse_contractions(
+    τ₁_αkβl_t::AbstractArray, τ₂_αkβl_t::AbstractArray,
+    sparse_modes_arrays_tt₀::NTuple{4, AbstractArray},
+    p_arr::AbstractVector{<:AbstractVector},
+    contract_arr::AbstractVecOrMat{<:Function}, full_corr_matrix::Bool; neg_sign::Bool=true
+)
+    # Unpack sparse modes arrays
+    x_sink_μiₓ_t, x_src_μiₓ_t₀, v_sink_ciₓk_t, v_src_ciₓk_t₀ = sparse_modes_arrays_tt₀
+
     # Number of points on spares lattice
-    _, N_points, _ = size(x_sink_μiₓt)
+    N_points = size(x_sink_μiₓ_t, 2)
 
-    # Source position and Laplace modes at source time `t₀`
-    x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
-    v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+    # Number of gamma matrices
+    Nᵧ = size(contract_arr, 1)
+    if full_corr_matrix && Nᵧ != size(contract_arr, 2)
+        throw(ArgumentError("contract_arr is not a square matrix."))
+    end
 
-    # Compute exp(+ipx) for source and reshape it to match shape of Laplace modes
-    exp_ipx_src_iₓ = exp.(2π*im * (x_src_μiₓ_t₀./parms.Nₖ)'*p)
-    exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
-    
-    # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
-        # Perambulators, sink position and Laplace modes at sink time t (index `iₜ`)
-        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
-        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
-        x_sink_μiₓ_t = @view x_sink_μiₓt[:, :, iₜ]
-        v_sink_ciₓk_t = @view v_sink_ciₓkt[:, :, :, iₜ]
+    # Convert momentum array to contiguous array
+    p_μiₚ = stack(p_arr)
 
-        # Compute exp(-ipx) for sink and reshape it to match shape of Laplace modes
-        exp_mipx_sink_iₓ = exp.(-2π*im * (x_sink_μiₓ_t./parms.Nₖ)'*p)
-        exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
+    # Indices
+    N_modes = size(τ₁_αkβl_t, 2)
+    a = IT.Index(3, "a")
+    b = IT.Index(3, "b")
+    α = IT.Index(4, "α")
+    β = IT.Index(4, "β")
+    iₓ = IT.Index(N_points, "iₓ")
+    k = IT.Index(N_modes, "k")
+    l = IT.Index(N_modes, "l")
+    n = IT.Index(Nᵧ, "n")
+    n̄ = IT.Index(Nᵧ, "nbar")
 
-        # Tensor contraction
-        TO.@tensoropt (a=>3, b=>3, α=>4, β=>4, l=>32, k=>32, l'=>32, k'=>32,
-                       iₓ=>512, iₓ'=>512) begin
-            C = conj(v_sink_ciₓk_t[a, iₓ', k]) * 
-                (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ', k'] *
-                τ₁_αkβl_t[α, k', β, l'] *
-                conj(v_src_ciₓk_t₀[b, iₓ, l']) *
-                (exp_ipx_src_iₓ .* v_src_ciₓk_t₀)[b, iₓ, l] *
-                conj(τ₂_αkβl_t[α, k, β, l])
+    # Perambulator 1 in forward direction
+    τ₁_t = IT.itensor(τ₁_αkβl_t, α, k, β, l)
+
+    # Perambulator 2 in backward direction (indices: α, k, β, l)
+    τ₂_t = IT.itensor(τ₂_αkβl_t, β', l, α', k)
+    τ₂_bw_t = IT.itensor(γ[5], β, β') * conj(τ₂_t) * IT.itensor(γ[5], α', α)
+
+    # Laplace modes for all iₓ'
+    v_sink_t = IT.itensor(v_sink_ciₓk_t, a, iₓ', k)
+
+    # Precontraction for smeared propagator 1
+    vτ₁ = v_sink_t * τ₁_t
+
+    # Precontraction for smeared propagator 2
+    IT.replaceinds!(v_sink_t, (a, k) => (b, l))
+    τv₂ = τ₂_bw_t * conj(v_sink_t)
+
+    # Allocate correlator matrix (momentum is fastest changing index)
+    if full_corr_matrix
+        C_iₚnn̄ = zeros(ComplexF64, length(p_arr), Nᵧ, Nᵧ)
+    else
+        C_iₚn = zeros(ComplexF64, length(p_arr), Nᵧ)
+    end
+
+    # Preallocate smeared propagators
+    D₁⁻¹_αaβbiₓ′_iₓ = Array{ComplexF64}(undef, 4, 3, 4, 3, N_points)
+    D₁⁻¹_iₓ = IT.itensor(D₁⁻¹_αaβbiₓ′_iₓ, α, a, β, b, iₓ')
+    D₂⁻¹_αaβbiₓ′_iₓ = Array{ComplexF64}(undef, 4, 3, 4, 3, N_points)
+    D₂⁻¹_iₓ = IT.itensor(D₂⁻¹_αaβbiₓ′_iₓ, α, a, β, b, iₓ')
+
+    # Loop over source position iₓ
+    for iₓ in 1:N_points
+        # Laplace modes at position iₓ
+        v_src_iₓt₀ = IT.itensor(@view(v_src_ciₓk_t₀[:, iₓ, :]), b, l)
+
+        # Smeared propagator 1 (forward direction)
+        IT.mul!(D₁⁻¹_iₓ, vτ₁, conj(v_src_iₓt₀))
+
+        # Smeared propagator 2 (backward direction)
+        IT.replaceinds!(v_src_iₓt₀, (b, l) => (a, k))
+        IT.mul!(D₂⁻¹_iₓ, v_src_iₓt₀, τv₂)
+
+        # Contractions
+        for iₓ′ in 1:N_points
+            # Exponential for momentum projection
+            m2πiΔx = -2π*im * 
+                (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t₀[:, iₓ])./parms.Nₖ
+            exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
+
+            D₁⁻¹_αaβb_iₓ′iₓ = @view(D₁⁻¹_αaβbiₓ′_iₓ[:, :, :, :, iₓ′])
+            D₂⁻¹_αaβb_iₓiₓ′ = @view(D₂⁻¹_αaβbiₓ′_iₓ[:, :, :, :, iₓ′])
+            
+            if full_corr_matrix
+                # Compute all correlator matrix entries
+                for n in 1:Nᵧ, n̄ in 1:Nᵧ
+                    C_iₚnn̄[:, n, n̄] += exp_mipΔx_arr * contract_arr[n, n̄](
+                        D₁⁻¹_αaβb_iₓ′iₓ, D₂⁻¹_αaβb_iₓiₓ′
+                    )
+                end
+            else
+                # Compute diagonal correlator matrix entries
+                for n in 1:Nᵧ
+                    C_iₚn[:, n] += exp_mipΔx_arr * contract_arr[n](
+                        D₁⁻¹_αaβb_iₓ′iₓ, D₂⁻¹_αaβb_iₓiₓ′
+                    )
+                end
+            end
         end
+    end
 
+    if full_corr_matrix
         # Normalization
-        C *= (prod(parms.Nₖ)/N_points)^2
+        C_iₚnn̄ .*= (prod(parms.Nₖ)/N_points)^2
 
-        # Circularly shift time such that t₀=0
-        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
-    end
-
-    return
-end
-pseudoscalar_sparse_contraction!(
-    Cₜ::AbstractVector, τ_αkβlt::AbstractArray,
-    sparse_modes_arrays::NTuple{4, AbstractArray}, t₀::Integer, p::AbstractVector
-) = pseudoscalar_sparse_contraction!(Cₜ, τ_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p)
-
-
-
-################################
-# Meson Contractions (connected)
-################################
-
-@doc raw"""
-    meson_connected_contraction_p0!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Γ::AbstractMatrix, Γbar::AbstractMatrix, t₀::Integer)
-
-Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` to get the connected meson correlator
-for zero momentum where `τ₁_αkβlt` is used to propagate in forward and `τ₂_αkβlt` in
-backward direction. The matrices `Γ` and `Γbar` are the matrices in the interpolating
-operators. This gives a vacuum expectation value of the form \
-`<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
-(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
-
-The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
-that the source time is at the origin.
-"""
-function meson_connected_contraction_p0!(
-    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Γ::AbstractMatrix,
-    Γbar::AbstractMatrix, t₀::Integer
-)
-    # Multiply γ₅ to Gammas
-    γ₅Γ = γ[5]*Γ
-    Γbarγ₅ = -Γbar*γ[5]
-
-    # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
-        # perambulators at sink (index `iₜ`)
-        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :, iₜ]
-        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :, iₜ]
-
-        # Tensor contraction
-        TO.@tensor order=(k, l, α', α, β, β') begin
-            C = γ₅Γ[α, α'] * τ₁_αkβl_t[α', k, β, l] *
-                Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
+        # Sign flip
+        if neg_sign
+            C_iₚnn̄ .*= -1
         end
 
-        # Circularly shift time such that t₀=0
-        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
-    end
-
-    return
-end
-
-@doc raw"""
-    meson_connected_contraction!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Φ_kltiₚ::AbstractArray,  Γ::AbstractMatrix, Γbar::AbstractMatrix, t₀::Integer, iₚ::Integer)
-
-Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the mode doublets `Φ_kltiₚ` to get
-the connected meson correlator where `τ₁_αkβlt` is used to propagate in forward and
-`τ₂_αkβlt` in backward direction. The matrices `Γ` and `Γbar` are the matrices in the
-interpolating operators. This gives a vacuum expectation value of the form \
-`<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
-(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
-
-The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
-that the source time is at the origin. The index `iₚ` sets the momentum that is used from
-the mode doublets.
-"""
-function meson_connected_contraction!(
-    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
-    Φ_kltiₚ::AbstractArray,  Γ::AbstractMatrix, Γbar::AbstractMatrix,
-    t₀::Integer, iₚ::Integer
-)
-    # Multiply γ₅ to Gammas
-    γ₅Γ = γ[5]*Γ
-    Γbarγ₅ = -Γbar*γ[5]
-
-    # Index for source time `t₀`
-    i_t₀ = t₀+1
-
-    # Mode doublet at source time `t₀`
-    Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
-
-    # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
-        # Mode doublet and perambulators at sink time t (index `iₜ`)
-        Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
-        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
-        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
-        
-        # Tensor contraction
-        TO.@tensoropt (α=>4, β=>4, α'=>4, β'=>4, l=>32, k=>32, l'=>32, k'=>32) begin
-            C = Φ_kl_tiₚ[k, k'] *
-                γ₅Γ[α, α'] * τ₁_αkβl_t[α', k', β, l'] *
-                conj(Φ_kl_t₀iₚ[l, l']) * 
-                Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
-        end
-
-        # Circularly shift time such that t₀=0
-        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
-    end
-
-    return
-end
-
-@doc raw"""
-    meson_connected_sparse_contraction!(Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, sparse_modes_arrays::NTuple{4, AbstractArray},  Γ::AbstractMatrix, Γbar::AbstractMatrix, t₀::Integer,  p::AbstractVector)
-
-Contract the perambulators `τ₁_αkβlt` and `τ₂_αkβlt` and the sparse Laplace modes stored in
-`sparse_modes_arrays` to get the connected meson correlator where `τ₁_αkβlt` is used to
-propagate in forward and `τ₂_αkβlt` in backward direction. The matrices `Γ` and `Γbar` are
-the matrices in the interpolating operators. This gives a vacuum expectation value of the
-form \
-`<(ψ₂Γψ₁)(x) (ψ₁Γbarψ₂)(0)>` \
-(in position space) where the indices of the `ψ`'s match the indiced of the perambulators.
-
-The result is stored in `Cₜ`. The source time `t₀` is used to circularly shift `Cₜ` such
-that the source time is at the origin. The array `p` is the integer momentum that is used
-for the momentum projection of the correlator.
-"""
-function meson_connected_sparse_contraction!(
-    Cₜ::AbstractVector, τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
-    sparse_modes_arrays::NTuple{4, AbstractArray},  Γ::AbstractMatrix, Γbar::AbstractMatrix,
-    t₀::Integer, p::AbstractVector
-)
-    # Multiply γ₅ to Gammas
-    γ₅Γ = γ[5]*Γ
-    Γbarγ₅ = -Γbar*γ[5]
-
-    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
-
-    # Index for source time `t₀`
-    i_t₀ = t₀+1
-    
-    # Number of points on spares lattice
-    _, N_points, _ = size(x_sink_μiₓt)
-
-    # Source position and Laplace modes at source time `t₀`
-    x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
-    v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
-
-    # Compute exp(+ipx) for source and reshape it to match shape of Laplace modes
-    exp_ipx_src_iₓ = exp.(2π*im * (x_src_μiₓ_t₀./parms.Nₖ)'*p)
-    exp_ipx_src_iₓ = reshape(exp_ipx_src_iₓ, (1, N_points, 1))
-    
-    # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
-        # Perambulators, sink position and Laplace modes at sink time t (index `iₜ`)
-        τ₁_αkβl_t = @view τ₁_αkβlt[:, :, :, :,iₜ]
-        τ₂_αkβl_t = @view τ₂_αkβlt[:, :, :, :,iₜ]
-        x_sink_μiₓ_t = @view x_sink_μiₓt[:, :, iₜ]
-        v_sink_ciₓk_t = @view v_sink_ciₓkt[:, :, :, iₜ]
-
-        # Compute exp(-ipx) for sink and reshape it to match shape of Laplace modes
-        exp_mipx_sink_iₓ = exp.(-2π*im * (x_sink_μiₓ_t./parms.Nₖ)'*p)
-        exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
-
-        # Tensor contraction
-        TO.@tensoropt (a=>3, b=>3, α=>4, β=>4, α'=>4, β'=>4, l=>32, k=>32, l'=>32, k'=>32,
-                       iₓ=>512, iₓ'=>512) begin
-            C = conj(v_sink_ciₓk_t[a, iₓ', k]) * 
-                (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ', k'] *
-                γ₅Γ[α, α'] * τ₁_αkβl_t[α', k', β, l'] *
-                conj(v_src_ciₓk_t₀[b, iₓ, l']) *
-                (exp_ipx_src_iₓ .* v_src_ciₓk_t₀)[b, iₓ, l] *
-                Γbarγ₅[β, β'] * conj(τ₂_αkβl_t[α, k, β', l])
-        end
-
+        # Make momentum index the last
+        return permutedims(C_iₚnn̄, (2, 3, 1))
+    else
         # Normalization
-        C *= (prod(parms.Nₖ)/N_points)^2
+        C_iₚn .*= (prod(parms.Nₖ)/N_points)^2
 
-        # Circularly shift time such that t₀=0
-        Cₜ[mod1(iₜ-t₀, parms.Nₜ)] = C
+        # Sign flip
+        if neg_sign
+            C_iₚn .*= -1
+        end
+
+        # Make momentum index the last
+        return permutedims(C_iₚn, (2, 1))
     end
-
-    return
 end

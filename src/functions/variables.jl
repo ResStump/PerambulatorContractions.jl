@@ -1,3 +1,6 @@
+# Identity matrix
+I = LA.diagm(ComplexF64[1.0, 1.0, 1.0, 1.0])
+
 # Pauli matrices
 σ₀ = [1 0;
       0 1]
@@ -9,7 +12,6 @@
       0 -1]
 O = [0 0;
      0 0]
-σ = Dict(0=>σ₀, 1=>σ₁, 2=>σ₂, 3=>σ₃)
 
 # Euclidean gamma matrice in chiral rep
 γ₁ = ComplexF64[   O -im*σ₁;
@@ -27,3 +29,6 @@ O = [0 0;
 
 # Charge conjugation matrix
 C = im*γ₂*γ₄
+
+# Commutator of gamma matrices
+σ_μν(μ, ν) = γ[μ]*γ[ν] - γ[ν]*γ[μ]

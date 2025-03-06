@@ -1,4 +1,62 @@
 @doc raw"""
+    parse_gamma_string(s)
+
+Parse a string `s` and return the corresponding gamma matrix. The string can contain the
+following symbols:
+- "I" or "1" for the identity matrix
+- "G1", "G2", "G3", "G4", "G5" for the `γ₁`, `γ₂`, `γ₃`, `γ₄`, `γ₅` matrices
+- "G1G5", "G2G5", "G3G5", "G4G5" for the `γ₁*γ₅`, `γ₂*γ₅`, `γ₃*γ₅`, `γ₄*γ₅` matrices
+- "sigmaμν" for the `σ_{μν} = γ_μ*γ_ν - γ_ν*γ_μ` matrix
+- prefactors "+", "-", "i" and "C" (and combinations)
+"""
+function parse_gamma_string(s)
+    # Dictionary mapping strings to matrices
+    gamma_dict = Dict(
+        "I" => I,
+        "1" => I,
+        "G5" => γ[5]
+    )
+
+    # Add γ_μ and γ_μ*γ_5 terms terms
+    for μ in 1:4
+        gamma_dict["G$μ"] = γ[μ]
+        gamma_dict["G$(μ)G5"] = γ[μ] * γ[5]
+    end
+
+    # Add σ_{\mu\nu} terms
+    for μ in 1:4, ν in (μ+1):4
+        gamma_dict["sigma$μ$ν"] = σ_μν(μ, ν)
+    end
+
+    # Handle sign, imaginary unit and charge conjugation matrix
+    prefactor = 1
+    
+    if startswith(s, "-")
+        prefactor *= -1
+        s = s[2:end]
+    elseif startswith(s, "+")
+        s = s[2:end]  # Just remove the "+"
+    end
+    
+    if startswith(s, "i")
+        prefactor *= im
+        s = s[2:end]
+    end
+
+    if startswith(s, "C")
+        prefactor *= C
+        s = s[2:end]
+    end
+
+    # Look up the corresponding matrix in the dictionary
+    if haskey(gamma_dict, s)
+        return prefactor * gamma_dict[s]
+    else
+        error("Unknown symbol: $s")
+    end
+end
+
+@doc raw"""
     increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays, N_sep_new, n_cnfg)
 
 Increase the separation of the sparse spaces in `sparse_modes_arrays` and store the result
@@ -83,7 +141,7 @@ function sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arr
     _, N_points, _ = size(x_sink_μiₓt)
 
     # Loop over all sink time indice
-    Threads.@threads for iₜ in 1:parms.Nₜ
+    for iₜ in 1:parms.Nₜ
         for (iₚ, p) in zip(iₚ_arr, p_arr)
             # Mode doublet and Laplace modes at sink time t (index `iₜ`)
             Φ_sink_kl_tiₚ = @view Φ_sink_kltiₚ[:, :, iₜ, iₚ]
@@ -103,16 +161,25 @@ function sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arr
             exp_mipx_src_iₓ = exp.(-2π*im * (x_src_μiₓ_t./parms.Nₖ)'*p)
             exp_mipx_src_iₓ = reshape(exp_mipx_src_iₓ, (1, N_points, 1))
 
-            # Tensor contraction
-            TO.@tensoropt (a=>3, l=>32, k=>32, iₓ=>512) begin
-                Φ_sink_kl_tiₚ[k, l] = 
-                    conj(v_sink_ciₓk_t[a, iₓ, k]) * 
-                    (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ, l]
+            # Indices
+            N_modes = size(Φ_sink_kltiₚ, 1)
+            a = IT.Index(3, "a")
+            iₓ = IT.Index(N_points, "iₓ")
+            k = IT.Index(N_modes, "k")
+            l = IT.Index(N_modes, "l")
 
-                Φ_src_kl_tiₚ[k, l] = 
-                    conj(v_src_ciₓk_t[a, iₓ, k]) * 
-                    (exp_mipx_src_iₓ .* v_src_ciₓk_t)[a, iₓ, l]
-            end
+            # Allocate ITensors
+            Φ_sink_tiₚ = IT.itensor(Φ_sink_kl_tiₚ, k, l)
+            Φ_src_tiₚ = IT.itensor(Φ_src_kl_tiₚ, k, l)
+
+            v_sink = IT.itensor(v_sink_ciₓk_t, a, iₓ, k)
+            exp_v_sink = IT.itensor(exp_mipx_sink_iₓ .* v_sink_ciₓk_t, a, iₓ, l)
+            v_src = IT.itensor(v_src_ciₓk_t, a, iₓ, k)
+            exp_v_src = IT.itensor(exp_mipx_src_iₓ .* v_src_ciₓk_t, a, iₓ, l)
+
+            # Tensor contraction
+            IT.mul!(Φ_sink_tiₚ, conj(v_sink), exp_v_sink)
+            IT.mul!(Φ_src_tiₚ, conj(v_src), exp_v_src)
         end
     end
 
