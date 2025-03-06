@@ -8,214 +8,85 @@ PC.read_parameters()
 # Paths to files
 perambulator_file = PC.parms.perambulator_dir/"perambulator_light_tsrc2_16x8v1n1"
 mode_doublets_file = PC.parms.mode_doublets_dir/"mode_doublets_16x8v1n1"
-sparse_modes_file = PC.parms.sparse_modes_dir/"sparse_modes_Nsep1_16x8v1n1"
+sparse_modes_file_Nsep1 = PC.parms.sparse_modes_dir/"sparse_modes_Nsep1_16x8v1n1"
+sparse_modes_file_Nsep2 = PC.parms.sparse_modes_dir/"sparse_modes_Nsep2_16x8v1n1"
+
+# Set momenta and their indices
+p_arr = [[0, 0, 0], [1, 0, 0]]
+iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
 
 # Read files
 τ_αkβlt = PC.read_perambulator(perambulator_file)
-p_arr = PC.read_mode_doublet_momenta(mode_doublets_file)
 Φ_kltiₚ = PC.read_mode_doublets(mode_doublets_file)
-sparse_modes_arrays = PC.read_sparse_modes(sparse_modes_file)
+sparse_modes_arrays_Nsep1 = PC.read_sparse_modes(sparse_modes_file_Nsep1)
+sparse_modes_arrays_Nsep2 = PC.read_sparse_modes(sparse_modes_file_Nsep2)
 
+@testset "Connected meson contraction tests" begin
+    # Gamma matrices
+    Γ_arr = [PC.γ[5], PC.γ[1]]
+    Γbar_arr = [PC.γ[4]] .* adjoint.(Γ_arr) .* [PC.γ[4]]
+    Nᵧ = length(Γ_arr)
 
-@testset "Compare full modes at sink and src" begin
-    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
-
-    # Loop over all times
-    for iₜ in 1:PC.parms.Nₜ
-        # Loop over all positions at sink
-        for (iₓ_sink, x_sink) in enumerate(eachcol(x_sink_μiₓt[:, :, iₜ]))
-            # Find position index at source that corresponds to that at sink
-            iₓ_src = findfirst(x -> x == x_sink, eachcol(x_src_μiₓt[:, :, iₜ]))
-
-            @test v_sink_ciₓkt[:, iₓ_sink, :, iₜ] == v_src_ciₓkt[:, iₓ_src, :, iₜ]
-        end
-    end
-end
-
-@testset "Compare mode doublets from full modes to those from file" begin
-    Φ2_kltiₚ = similar(Φ_kltiₚ)
-    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
-    
-    # Number of points on spares lattice
-    _, N_points, _ = size(x_sink_μiₓt)
-
-    # Loop over all momenta
-    for (iₚ, p) in enumerate(p_arr)
-        # Loop over all sink time indice
-        for iₜ in 1:PC.parms.Nₜ
-            # Laplace modes at sink time t (index 'iₜ')
-            v_sink_ciₓk_t = @view v_sink_ciₓkt[:, :, :, iₜ]
-
-            # Compute exp(+ipx) and reshape it to match shape of Laplace modes
-            exp_mipx_sink_iₓ = exp.(-2π*im * (x_sink_μiₓt[:, :, iₜ]./PC.parms.Nₖ)'*p)
-            exp_mipx_sink_iₓ = reshape(exp_mipx_sink_iₓ, (1, N_points, 1))
-
-            Φ2_kl_tiₚ = @view Φ2_kltiₚ[:, :, iₜ, iₚ]
-            TO.@tensoropt begin
-                Φ2_kl_tiₚ[k, l] = conj(v_sink_ciₓk_t[a, iₓ, k]) * 
-                    (exp_mipx_sink_iₓ .* v_sink_ciₓk_t)[a, iₓ, l]
-            end
-        end
-    end
-
-    # Check if both mode doublets are the same
-    @test Φ_kltiₚ ≈ Φ2_kltiₚ
-end
-
-@testset "Compare pseudoscalar correlator from mode doublets and from full modes" begin
-    Cₜ_mode_doublets = Array{ComplexF64}(undef, PC.parms.Nₜ)
-    Cₜ_mode_doublets_p0 = similar(Cₜ_mode_doublets)
-    Cₜ_full_modes = similar(Cₜ_mode_doublets)
-
-    # Source time t₀
-    t₀ = PC.parms.tsrc_arr[1, 1]
-
-    # For zero mometum
-    PC.pseudoscalar_contraction_p0!(Cₜ_mode_doublets_p0, τ_αkβlt, t₀)
-
-    # Loop over all momenta
-    for (iₚ, p) in enumerate(p_arr)
-        PC.pseudoscalar_contraction!(Cₜ_mode_doublets, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-        PC.pseudoscalar_sparse_contraction!(Cₜ_full_modes, τ_αkβlt, sparse_modes_arrays,
-                                            t₀, p)
-
-        @test Cₜ_mode_doublets ≈ Cₜ_full_modes
-
-        if p == [0, 0, 0]
-            @test Cₜ_mode_doublets ≈ Cₜ_mode_doublets_p0
-        end
-    end
-end
-
-@testset "Compare pseudoscalar contractions with one and two perambulators" begin
-    Cₜ_1 = Array{ComplexF64}(undef, PC.parms.Nₜ)
-    Cₜ_2 = similar(Cₜ_1)
-
-    # Source time t₀ and momentum index iₚ
-    t₀ = PC.parms.tsrc_arr[1, 1]
-    iₚ = 1
-    p = p_arr[iₚ]
-
-    # For zero momentum
-    PC.pseudoscalar_contraction_p0!(Cₜ_1, τ_αkβlt, t₀)
-    PC.pseudoscalar_contraction_p0!(Cₜ_2, τ_αkβlt, τ_αkβlt, t₀)
-    @test Cₜ_1 ≈ Cₜ_2
-
-    # Using mode doublets
-    PC.pseudoscalar_contraction!(Cₜ_1, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-    PC.pseudoscalar_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-    @test Cₜ_1 ≈ Cₜ_2
-
-    # Using sparse modes
-    PC.pseudoscalar_sparse_contraction!(Cₜ_1, τ_αkβlt, sparse_modes_arrays, t₀, p)
-    PC.pseudoscalar_sparse_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt, sparse_modes_arrays, t₀, p)
-    @test Cₜ_1 ≈ Cₜ_2
-end
-
-@testset "Meson_connected contractions" begin
-    Cₜ_1 = Array{ComplexF64}(undef, PC.parms.Nₜ)
-    Cₜ_2 = similar(Cₜ_1)
-
-    # Source time t₀ and momentum index iₚ
-    t₀ = PC.parms.tsrc_arr[1, 1]
-    iₚ = 1
-    p = p_arr[iₚ]
-
-    # Matrices in interpolstors
-    Γ_arr = [PC.γ[1], PC.γ[2], PC.γ[3], PC.γ[5]*PC.γ[4], PC.γ[5]]
-
-    for Γ in Γ_arr
-        Γbar = PC.γ[4]*Γ*PC.γ[4]
-
-        # Zero Momentum
-        ###############
-
-        # Direct computation
-        for iₜ in 1:PC.parms.Nₜ
-            # perambulators at sink (index `iₜ`)
-            τ_αkβl_t = @view τ_αkβlt[:, :, :, :, iₜ]
-
-            # Tensor contraction
-            TO.@tensoropt begin
-                C = (PC.γ[5]*Γ)[α, α'] * τ_αkβl_t[α', k, β, l] *
-                    (-Γbar*PC.γ[5])[β, β'] * conj(τ_αkβl_t[α, k, β', l])
-            end
-
-            # Circularly shift time such that t₀=0
-            Cₜ_1[mod1(iₜ-t₀, PC.parms.Nₜ)] = C
-        end
-        
-        PC.meson_connected_contraction_p0!(Cₜ_2, τ_αkβlt, τ_αkβlt, Γ, Γbar, t₀)
-        @test Cₜ_1 ≈ Cₜ_2
-
-
-        # Non-Zero Momentum
-        ###################
-
-        # Index for source time `t₀`
-        i_t₀ = t₀+1
-
-        # Mode doublet at source time `t₀`
-        Φ_kl_t₀iₚ = @view Φ_kltiₚ[:, :, i_t₀, iₚ]
-
-        # Direct computation
-        for iₜ in 1:PC.parms.Nₜ
-            # Mode doublet and perambulators at sink time t (index `iₜ`)
-            Φ_kl_tiₚ = @view Φ_kltiₚ[:, :, iₜ, iₚ]
-            τ_αkβl_t = @view τ_αkβlt[:, :, :, :,iₜ]
-            
-            # Tensor contraction
-            TO.@tensoropt begin
-                C = Φ_kl_tiₚ[k, k'] *
-                    (PC.γ[5]*Γ)[α, α'] * τ_αkβl_t[α', k', β, l'] *
-                    conj(Φ_kl_t₀iₚ[l, l']) *
-                    (-Γbar*PC.γ[5])[β, β'] * conj(τ_αkβl_t[α, k, β', l])
-            end
-
-            # Circularly shift time such that t₀=0
-            Cₜ_1[mod1(iₜ-t₀, PC.parms.Nₜ)] = C
-        end
-        
-        PC.meson_connected_contraction!(Cₜ_2, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
-                                        Γ, Γbar, t₀, iₚ)
-        @test Cₜ_1 ≈ Cₜ_2
-
-        # Check if meson_connected_sparse_contraction! is also correct
-        PC.meson_connected_sparse_contraction!(
-            Cₜ_2, τ_αkβlt, τ_αkβlt, sparse_modes_arrays, Γ, Γbar, t₀, p
+    # Generate contraction functions for sparse contractions
+    contract_arr = Matrix{Function}(undef, Nᵧ, Nᵧ)
+    for n in 1:Nᵧ, n̄ in 1:Nᵧ
+        contract_arr[n, n̄] = PC.generate_meson_connected_contract_func(
+            Γ_arr[n], Γbar_arr[n̄]
         )
-        @test Cₜ_1 ≈ Cₜ_2
     end
-end
 
-@testset "Compare meson_connected and pseudoscalar contractions" begin
-    Cₜ_pseudoscalar = Array{ComplexF64}(undef, PC.parms.Nₜ)
-    Cₜ_meson_connected = similar(Cₜ_pseudoscalar)
+    # Choose one sink time `t`
+    t = 10
+    iₜ = t + 1
 
-    # Source time t₀ and momentum index iₚ
+    # Source time t₀ and its index
     t₀ = PC.parms.tsrc_arr[1, 1]
-    iₚ = 1
-    p = p_arr[iₚ]
+    i_t₀ = t₀+1
 
-    # Matrices in interpolstors
-    Γ, Γbar = PC.γ[5], -PC.γ[5]
+    # Compare correlator from mode doublets and from full Laplace modes to it self and to
+    # saved correlators
 
-    # For zero momentum
-    PC.pseudoscalar_contraction_p0!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt, t₀)
-    PC.meson_connected_contraction_p0!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt,
-                                       Γ, Γbar, t₀)
-    @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
+    # Unpack sparse modes arrays
+    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays_Nsep1
 
-    # Using mode doublets
-    PC.pseudoscalar_contraction!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt, Φ_kltiₚ, t₀, iₚ)
-    PC.meson_connected_contraction!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt, Φ_kltiₚ,
-                                    Γ, Γbar, t₀, iₚ)
-    @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
+    # Select source time `t₀`
+    Φ_kliₚ_t₀ = @view Φ_kltiₚ[:, :, i_t₀, :]
+    x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
+    v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
 
-    # Using sparse modes
-    PC.pseudoscalar_sparse_contraction!(Cₜ_pseudoscalar, τ_αkβlt, τ_αkβlt,
-                                        sparse_modes_arrays, t₀, p)
-    PC.meson_connected_sparse_contraction!(Cₜ_meson_connected, τ_αkβlt, τ_αkβlt,
-                                           sparse_modes_arrays, Γ, Γbar, t₀, p)
-    @test Cₜ_pseudoscalar ≈ Cₜ_meson_connected
+    # Views of tensors
+    τ_αkβl_t = @view τ_αkβlt[:, :, :, :, iₜ]
+    Φ_kliₚ_t = @view Φ_kltiₚ[:, :, iₜ, :]
+    x_sink_μiₓ_t = @view x_sink_μiₓt[:, :, iₜ]
+    v_sink_ciₓk_t = @view v_sink_ciₓkt[:, :, :, iₜ]
+
+    # Compute correlator from mode doublets
+    C_nn̄iₚ_t_full = Array{ComplexF64}(undef, 2, 2, length(p_arr))
+    for (i_p, iₚ) in enumerate(iₚ_arr)
+        C_nn̄iₚ_t_full[:, :, i_p] = PC.meson_connected_contractions(
+            τ_αkβl_t, τ_αkβl_t, Φ_kliₚ_t, Φ_kliₚ_t₀, Γ_arr, iₚ, true
+        )
+    end
+
+    # Compute correlator from full modes
+    C_nn̄iₚ_t_modes = PC.meson_connected_sparse_contractions(
+        τ_αkβl_t, τ_αkβl_t, (x_sink_μiₓ_t, x_src_μiₓ_t₀, v_sink_ciₓk_t, v_src_ciₓk_t₀),
+        p_arr, contract_arr, true
+    )
+
+    @test C_nn̄iₚ_t_full ≈ C_nn̄iₚ_t_modes
+
+    @test C_nn̄iₚ_t_full[:, :, 1] ≈
+        PC.HDF5.h5read("16x8v1_data/16x8v1_6modes_meson_connected_llbar_full.hdf5",
+                       "Correlators/p0,0,0")[iₜ-t₀, :, :, 1, 1]
+    @test C_nn̄iₚ_t_full[:, :, 2] ≈
+        PC.HDF5.h5read("16x8v1_data/16x8v1_6modes_meson_connected_llbar_full.hdf5",
+                       "Correlators/p1,0,0")[iₜ-t₀, :, :, 1, 1]
+
+    @test C_nn̄iₚ_t_modes[:, :, 1] ≈
+        PC.HDF5.h5read("16x8v1_data/16x8v1_6modes_meson_connected_llbar_sparse_Nsep1.hdf5",
+                       "Correlators/p0,0,0")[iₜ-t₀, :, :, 1, 1]
+    @test C_nn̄iₚ_t_modes[:, :, 2] ≈
+        PC.HDF5.h5read("16x8v1_data/16x8v1_6modes_meson_connected_llbar_sparse_Nsep1.hdf5",
+                       "Correlators/p1,0,0")[iₜ-t₀, :, :, 1, 1]
 end

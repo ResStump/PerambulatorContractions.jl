@@ -1,8 +1,13 @@
 import MPI
 import LinearAlgebra as LA
-import TensorOperations as TO
+import ITensors as IT
 import FilePathsBase: /, Path
 import PerambulatorContractions as PC
+#= include("../src/PerambulatorContractions.jl")
+PC = PerambulatorContractions =#
+#= if pwd()[end-3:end] != "test"
+    cd("test")
+end =#
 import Test:@test, @testset
 
 
