@@ -41,8 +41,8 @@ PrecompileTools.@setup_workload begin
         meson_connected_contractions(τ_αkβl_t, τ_αkβl_t, Φ_kliₚ_t, Φ_kliₚ_t₀, [Γ], iₚ,
                                      false)
         meson_connected_contractions(τ_αkβl_t, τ_αkβl_t, Φ_kliₚ_t, Φ_kliₚ_t₀, [Γ], iₚ, true)
-        contract = generate_meson_connected_contract_func(Γ, Γbar)
+        #= contract = generate_meson_connected_contract_func(Γ, Γbar)
         meson_connected_sparse_contractions(τ_αkβl_t, τ_αkβl_t, sparse_modes_arrays_tt₀,
-                                            p_arr, [contract], false)
+                                            p_arr, [contract], false) =#
     end
 end

@@ -92,9 +92,13 @@ else
 end
 
 # Momentum indices in mode doublets corresponding to the momentas in p_arr
-iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
-if (method != "full") && any(isnothing.(iₚ_arr))
-    throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
+if method == "full"
+    iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
+    if any(isnothing.(iₚ_arr))
+        throw(DomainError("a chosen momentum `p` is not contained in the mode doublets."))
+    end
+elseif method == "sparse"
+    iₚ_arr = eachindex(p_arr)
 end
 
 
@@ -152,28 +156,6 @@ function write_correlator(; tmp=false)
 end
 
 
-# %%############################
-# Generate contraction functions
-################################
-
-if method == "sparse"
-    Γbar_arr = [PC.γ[4]] .* adjoint.(Γ_arr) .* [PC.γ[4]]
-    @time "Generate contraction functions" begin
-        if corr_matrix_type == "full"
-            contract_arr = Matrix{Function}(undef, Nᵧ, Nᵧ)
-            for n in 1:Nᵧ, n̄ in 1:Nᵧ
-                contract_arr[n, n̄] = PC.generate_meson_connected_contract_func(
-                    Γ_arr[n], Γbar_arr[n̄]
-                )
-            end
-        elseif corr_matrix_type == "diag"
-            contract_arr = PC.generate_meson_connected_contract_func.(Γ_arr, Γbar_arr)
-        end
-    end
-    println()
-end
-
-
 # %%#############
 # Allocate Arrays
 #################
@@ -196,6 +178,12 @@ if my_cnfg_rank == 0
     # Sparse mode arrays
     if method == "sparse"
         sparse_modes_arrays = PC.allocate_sparse_modes(sparse_modes_file(n_cnfg))
+
+        # Sparse mode doublets
+        mode_doublets_size = 
+            (PC.parms.N_modes, PC.parms.N_modes, PC.parms.Nₜ, length(p_arr))
+        Φ_sink_kltiₚ = Array{ComplexF64}(undef, mode_doublets_size)
+        Φ_src_kltiₚ = Array{ComplexF64}(undef, mode_doublets_size)
 
         # Set point separation
         N_points = size(sparse_modes_arrays[1], 2)
@@ -270,46 +258,29 @@ function compute_contractions!(i_src, t₀, i_cnfg)
 
                 all_arrays = (τ₁_arr, τ₂_arr, Φ_arr, [Φ_kliₚ_t₀])
             elseif method == "sparse"
-                # Unpack sparse modes arrays
-                x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
-
-                x_sink_arr = eachslice(x_sink_μiₓt, dims=3)[iₜ_range]
-                v_sink_arr = eachslice(v_sink_ciₓkt, dims=4)[iₜ_range]
+                Φ_arr = eachslice(Φ_sink_kltiₚ, dims=3)[iₜ_range]
 
                 # Select source time `t₀`
-                x_src_μiₓ_t₀ = @view x_src_μiₓt[:, :, i_t₀]
-                v_src_ciₓk_t₀ = @view v_src_ciₓkt[:, :, :, i_t₀]
+                Φ_kliₚ_t₀ = @view Φ_src_kltiₚ[:, :, i_t₀, :]
 
-                all_arrays = (τ₁_arr, τ₂_arr, x_sink_arr, [x_src_μiₓ_t₀],
-                              v_sink_arr, [v_src_ciₓk_t₀])
+                all_arrays = (τ₁_arr, τ₂_arr, Φ_arr, [Φ_kliₚ_t₀])
             end
         end
 
         # Function to compute contractions
-        if method == "full"
-            contractions = (τ₁, τ₂, Φ_t, Φ_t₀) -> begin
-                C_arr = []
+        contractions = (τ₁, τ₂, Φ_t, Φ_t₀) -> begin
+            C_arr = []
 
-                # Loop over all momentum indices
-                for iₚ in iₚ_arr
-                    C = PC.meson_connected_contractions(
-                        τ₁, τ₂, Φ_t, Φ_t₀, Γ_arr, iₚ, corr_matrix_type=="full"
-                    )
-                    push!(C_arr, C)
-                end
-
-                # Return as contiguous arrays
-                return stack(C_arr)
-            end
-        elseif method == "sparse"
-            contractions = (τ₁, τ₂, x_sink, x_src, v_sink, v_src) -> begin
-                C = PC.meson_connected_sparse_contractions(
-                    τ₁, τ₂, (x_sink, x_src, v_sink, v_src), p_arr, contract_arr,
-                    corr_matrix_type=="full"
+            # Loop over all momentum indices
+            for iₚ in iₚ_arr
+                C = PC.meson_connected_contractions(
+                    τ₁, τ₂, Φ_t, Φ_t₀, Γ_arr, iₚ, corr_matrix_type=="full"
                 )
-
-                return C
+                push!(C_arr, C)
             end
+
+            # Return as contiguous arrays
+            return stack(C_arr)
         end
 
         # Distribute workload and compute contraction
@@ -354,6 +325,11 @@ function main()
             elseif my_cnfg_rank == 0 && method == "sparse"
                 @time "  Read sparse modes " begin
                     PC.read_sparse_modes!(sparse_modes_file(n_cnfg), sparse_modes_arrays)
+                end
+
+                @time "  Compute sparse mode doublets" begin
+                    PC.sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arrays,
+                                             iₚ_arr, p_arr)
                 end
             end
             println()
