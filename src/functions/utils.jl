@@ -133,6 +133,9 @@ function sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arr
                                iₚ_arr, p_arr)
     x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
+    # Number of points on spares lattice
+    N_points = size(x_sink_μiₓ_t, 2)
+
     if size(iₚ_arr) != size(p_arr)
         throw(ArgumentError("the vectors `iₚ_arr` and `p_arr` don't have the same shape."))
     end
@@ -182,6 +185,10 @@ function sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arr
             IT.mul!(Φ_src_tiₚ, conj(v_src), exp_v_src)
         end
     end
+
+    # Normalization
+    Φ_sink_kltiₚ .*= prod(parms.Nₖ)/N_points
+    Φ_src_kltiₚ .*= prod(parms.Nₖ)/N_points
 
     return
 end
