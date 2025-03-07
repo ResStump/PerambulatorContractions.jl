@@ -243,6 +243,7 @@ end
 # %%#########
 # Computation
 #############
+
 function compute_contractions!(i_src, t₀, i_cnfg)
     @time "      meson connected contractons" begin
         if my_cnfg_rank == 0
