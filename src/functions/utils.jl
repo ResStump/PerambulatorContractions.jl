@@ -230,13 +230,23 @@ function sparse_mode_triplets!(Φ_sink_Ktiₚ, Φ_src_Ktiₚ, sparse_modes_array
 
     # Precomputation for momentum projection
     # (reshape to make p*x a vector matrix multiplication)
+    exp_mipx_sink_iₓtiₚ = Array{ComplexF64}(undef, N_points, parms.Nₜ, length(iₚ_arr))
     mix_sink_arr = -2π*im * (x_sink_μiₓt./reshape(parms.Nₖ, (:, 1, 1)))
     mix_sink_arr = reshape(mix_sink_arr, (3, :))
+    for (i_p, p) in enumerate(p_arr)
+        mipx_sink_iₓt = reshape(p' * mix_sink_arr, N_points, parms.Nₜ)
+        exp_mipx_sink_iₓtiₚ[:, :, i_p] = exp.(mipx_sink_iₓt)
+    end
 
+    exp_mipx_src_iₓtiₚ = Array{ComplexF64}(undef, N_points, parms.Nₜ, length(iₚ_arr))
     mix_src_arr = -2π*im * (x_src_μiₓt./reshape(parms.Nₖ, (:, 1, 1)))
     mix_src_arr = reshape(mix_src_arr, (3, :))
+    for (i_p, p) in enumerate(p_arr)
+        mipx_src_iₓt = reshape(p' * mix_src_arr, N_points, parms.Nₜ)
+        exp_mipx_src_iₓtiₚ[:, :, i_p] = exp.(mipx_src_iₓt)
+    end
 
-    # Permute vectors for memory efficiency
+    # Permute arrays for memory efficiency
     v_sink_iₓtck = permutedims(v_sink_ciₓkt, [2, 4, 1, 3])
     v_src_iₓtck = permutedims(v_src_ciₓkt, [2, 4, 1, 3])
 
@@ -253,14 +263,11 @@ function sparse_mode_triplets!(Φ_sink_Ktiₚ, Φ_src_Ktiₚ, sparse_modes_array
                 vvv_sink_iₓt =
                     scalar_triple_product(v_sink_k_arr, v_sink_l_arr, v_sink_h_arr)
 
-                for (iₚ, p) in zip(iₚ_arr, p_arr)
-                    # Compute exp(-ipx)
-                    mipx_sink_iₓt = reshape(p' * mix_sink_arr, N_points, parms.Nₜ)
-                    exp_mipx_sink_iₓt = exp.(mipx_sink_iₓt)
-
+                # Momentum projection
+                for (i_p, iₚ) in enumerate(iₚ_arr)
                     for iₜ in 1:parms.Nₜ
                         Φ_sink_Ktiₚ[K, iₜ, iₚ] =
-                            transpose(@view(exp_mipx_sink_iₓt[:, iₜ])) * 
+                            transpose(@view(exp_mipx_sink_iₓtiₚ[:, iₜ, i_p])) * 
                             @view(vvv_sink_iₓt[:, iₜ])
                     end
                 end
@@ -282,13 +289,11 @@ function sparse_mode_triplets!(Φ_sink_Ktiₚ, Φ_src_Ktiₚ, sparse_modes_array
                 # Contract eigenmodes with epsilon tensor
                 vvv_src_iₓt = scalar_triple_product(v_src_k_arr, v_src_l_arr, v_src_h_arr)
 
-                for (iₚ, p) in zip(iₚ_arr, p_arr)
-                    # Compute exp(-ipx)
-                    mipx_src_iₓt = reshape(p' * mix_src_arr, N_points, parms.Nₜ)
-                    exp_mipx_src_iₓt = exp.(mipx_src_iₓt)
-
+                # Momentum projection
+                for (i_p, iₚ) in enumerate(iₚ_arr)
                     for iₜ in 1:parms.Nₜ
-                        Φ_src_Ktiₚ[K, iₜ, iₚ] = transpose(@view(exp_mipx_src_iₓt[:, iₜ])) * 
+                        Φ_src_Ktiₚ[K, iₜ, iₚ] =
+                            transpose(@view(exp_mipx_src_iₓtiₚ[:, iₜ, i_p])) * 
                             @view(vvv_src_iₓt[:, iₜ])
                     end
                 end
