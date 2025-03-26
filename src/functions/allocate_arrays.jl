@@ -19,12 +19,31 @@ mode doublets.
 """
 function allocate_mode_doublets(mode_doublets_file)
     # Get number of momenta in mode doublets
-    Nₚ = length(read_mode_doublet_momenta(mode_doublets_file))
+    Nₚ = length(read_mode_doublets_momenta(mode_doublets_file))
 
     # Allocate array
     Φ_kltiₚ = Array{ComplexF64}(undef, parms.N_modes, parms.N_modes, parms.Nₜ, Nₚ)
 
     return Φ_kltiₚ
+end
+
+@doc raw"""
+    allocate_mode_triplets(mode_triplets_file) -> Φ_Ktiₚ
+
+Allocate the empty array `Φ_Ktiₚ` with the correct size to store mode triplets.
+
+The HDF5 file path `mode_triplets_file` is used to get the number of momenta stored in the
+mode triplets.
+"""
+function allocate_mode_triplets(mode_triplets_file)
+    # Get number of momenta in mode triplets
+    Nₚ = length(read_mode_triplets_momenta(mode_triplets_file))
+
+    # Allocate array
+    K_size = parms.N_modes*(parms.N_modes - 1)*(parms.N_modes - 2) ÷ 6
+    Φ_Ktiₚ = Array{ComplexF64}(undef, K_size, parms.Nₜ, Nₚ)
+
+    return Φ_Ktiₚ
 end
 
 @doc raw"""

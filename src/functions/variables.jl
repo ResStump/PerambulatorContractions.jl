@@ -12,6 +12,7 @@ I = LA.diagm(ComplexF64[1.0, 1.0, 1.0, 1.0])
       0 -1]
 O = [0 0;
      0 0]
+σ = [σ₁, σ₂, σ₃]
 
 # Euclidean gamma matrice in chiral rep
 γ₁ = ComplexF64[   O -im*σ₁;
@@ -31,4 +32,11 @@ O = [0 0;
 C = im*γ₂*γ₄
 
 # Commutator of gamma matrices
-σ_μν(μ, ν) = γ[μ]*γ[ν] - γ[ν]*γ[μ]
+σ_μν(μ, ν) = 0.5im*(γ[μ]*γ[ν] - γ[ν]*γ[μ])
+
+# Positive/negative parity projectors
+Pp = 0.5*(I + γ₄)
+Pm = 0.5*(I - γ₄)
+
+# Basis transformation to non-relativistic basis
+U = 1/sqrt(2)*(LA.I + γ[5]*γ[4])

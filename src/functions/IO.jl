@@ -11,6 +11,7 @@ struct Parms
     perambulator_dir
     perambulator_charm_dir
     mode_doublets_dir
+    mode_triplets_dir
     sparse_modes_dir
     result_dir
 
@@ -31,6 +32,10 @@ struct Parms
     iₚ_arr::Vector{Int}
     p_arr::Vector{Vector{Int}}
 
+    # Map between Laplace mode index K in the mode triplets and Laplace mode indices
+    # (k, l, h)
+    K_arr::Vector{Vector{Int}}
+
     # Number of ranks that symultaneously work on one configuration
     N_ranks_per_cnfg::Int
 end
@@ -39,12 +44,16 @@ parms = nothing
 parms_toml = nothing
 
 @doc raw"""
-    read_parameters()
+    read_parameters(type::Symbol)
 
 Read the parameters stored in the parameter file passed to the program with the flag -i and
-return the dictonary `parms_toml` and the Parms instance `parms`.
+set the global dictionary `parms_toml` and the global Parms instance `parms`.
+
+With `type` specify it it's a meson program (`type=:meson`) or a baryon program
+(`type=:baryon`). Depending on `type`, the momenta are read from the mode\_doublets or the
+mode\_triplets file.
 """
-function read_parameters()
+function read_parameters(type::Symbol)
     # Parse arguments
     s = AP.ArgParseSettings()
     AP.@add_arg_table s begin
@@ -87,6 +96,7 @@ function read_parameters()
     perambulator_charm_dir =
         Path(parms_toml["Directories and Files"]["perambulator_charm_dir"])
     mode_doublets_dir = Path(parms_toml["Directories and Files"]["mode_doublets_dir"])
+    mode_triplets_dir = Path(parms_toml["Directories and Files"]["mode_triplets_dir"])
     sparse_modes_dir = Path(parms_toml["Directories and Files"]["sparse_modes_dir"])
     result_dir = Path(parms_toml["Directories and Files"]["result_dir"])
 
@@ -124,19 +134,38 @@ function read_parameters()
     N_modes = size(file["perambulator"])[4]
     close(file)
 
-    # Path to a mode doublets file
-    mode_doublets_file = mode_doublets_dir/
-        "mode_doublets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
+    if type == :meson
+        # Path to a mode doublets file
+        mode_doublets_file = mode_doublets_dir/
+            "mode_doublets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
 
-    # Momenta and the corresponding indices
-    p_arr = read_mode_doublet_momenta(mode_doublets_file)
-    iₚ_arr = collect(1:length(p_arr))
+        # Momenta and the corresponding indices
+        p_arr = read_mode_doublets_momenta(mode_doublets_file)
+        iₚ_arr = collect(1:length(p_arr))
+
+        # Empty array for Laplace mode indices
+        K_arr = Vector{Vector{Int}}(undef, 0)
+    elseif type == :baryon
+        # Path to a mode triplets file
+        mode_triplets_file = mode_triplets_dir/
+            "mode_triplets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
+
+        # Momenta and the corresponding indices
+        p_arr = read_mode_triplets_momenta(mode_triplets_file)
+        iₚ_arr = collect(1:length(p_arr))
+
+        # Laplace mode indices in mode triplets
+        K_arr = read_mode_triplets_indices(mode_triplets_file)
+    else
+        throw(ArgumentError("type must be either :meson or :baryon."))
+    end
+    
 
     # Store all parameters
     global parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
-                         mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_numbers,
-                         tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, iₚ_arr, p_arr,
-                         N_ranks_per_cnfg)
+                         mode_doublets_dir, mode_triplets_dir, sparse_modes_dir, result_dir,
+                         cnfg_numbers, tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, iₚ_arr,
+                         p_arr, K_arr, N_ranks_per_cnfg)
     
     return
 end
@@ -201,11 +230,11 @@ function read_perambulator(perambulator_file)
 end
 
 @doc raw"""
-    read_mode_doublet_momenta(mode_doublets_file) -> p_arr
+    read_mode_doublets_momenta(mode_doublets_file) -> p_arr
 
-Read the mode doublets HDF5 file `mode_doublets_file` and return the momenta `p_arr`.
+Return the momenta `p_arr` from the mode doublets HDF5 file `mode_doublets_file`.
 """
-function read_mode_doublet_momenta(mode_doublets_file)
+function read_mode_doublets_momenta(mode_doublets_file)
     # Read momenta from and transpose them such that the p_arr[iₚ, :] is the iₚ'th momentum
     file = HDF5.h5open(string(mode_doublets_file), "r")
     p_μiₚ = read(file["axes"]["momenta"])
@@ -274,6 +303,98 @@ function read_mode_doublets(mode_doublets_file)
     read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
 
     return Φ_kltiₚ
+end
+
+@doc raw"""
+    read_mode_triplets_momenta(mode_triplets_file) -> p_arr
+
+Return the momenta `p_arr` from the mode triplets HDF5 file `mode_triplets_file`.
+"""
+function read_mode_triplets_momenta(mode_triplets_file)
+    # Read momenta from and transpose them such that the p_arr[iₚ, :] is the iₚ'th momentum
+    file = HDF5.h5open(string(mode_triplets_file), "r")
+    p_μiₚ = read(file["axes"]["momenta"])
+    close(file)
+
+    # Convert to vector of vectors
+    p_arr = collect.(eachcol(p_μiₚ))
+
+    return p_arr
+end
+
+@doc raw"""
+    read_mode_triplets_indices(mode_triplets_file) -> K_arr
+
+Return the Laplace mode indices `K_arr` from the mode triplets HDF5 file
+`mode_triplets_file`. It can be used to map the Laplace mode index `K` of the antisymmetric
+rank 3 tensor to the Laplace mode indices `(k, l, h)`.
+"""
+function read_mode_triplets_indices(mode_triplets_file)
+    # Read mode triplets
+    file = HDF5.h5open(string(mode_triplets_file), "r")
+    indices_iₖK = read(file["axes/mode_triplets"]) .+ 1 # 0-based to 1-based
+    close(file)
+
+    # Convert to vector of vectors
+    K_arr = collect.(eachcol(indices_iₖK))
+
+    return K_arr
+end
+
+@doc raw"""
+    read_mode_triplets!(mode_triplets_file, Φ_Ktiₚ)
+
+Read the mode\_triplets HDF5 file `mode_triplets_file` and store the mode triplets in
+`Φ_Ktiₚ`.
+
+### Indices
+The indices of `Φ_Ktiₚ` are:
+- K:  Laplace mode index for antisymmetric rank 3 tensor
+      (`K=1` -> `(1, 2, 3)`, `K=2` -> `(1, 2, 4)`, `K=3` -> `(1, 2, 5)`, ...)
+- t:  time
+- iₚ: momentum
+
+See also: `read_mode_triplets`.
+"""
+function read_mode_triplets!(mode_triplets_file, Φ_Ktiₚ)
+    # Check if shape is correct
+    k_size, Nₜ, _ = size(Φ_Ktiₚ)
+    if k_size != parms.N_modes*(parms.N_modes - 1)*(parms.N_modes - 2) ÷ 6
+        throw(DimensionMismatch("size of Φ_Ktiₚ is not correct."))
+    end
+    if Nₜ != parms.Nₜ
+        throw(DimensionMismatch("dimensions of time axis don't match."))
+    end
+
+    # Read mode triplets
+    file = HDF5.h5open(string(mode_triplets_file), "r")
+    Φ_Ktiₚ .= read(file["mode_triplets"])
+    close(file)
+
+    return
+end
+
+@doc raw"""
+    read_mode_triplets(mode_triplets_file) -> Φ_Ktiₚ
+
+Read the mode\_triplets HDF5 file `mode_triplets_file` and return the mode triplets
+`Φ_Ktiₚ`.
+
+### Indices
+The indices of `Φ_Ktiₚ` are:
+- k:  Laplace mode index for antisymmetric rank 3 tensor
+      (`k=1` -> `(1, 2, 3)`, `k=2` -> `(1, 2, 4)`, `k=3` -> `(1, 2, 5)`, ...)
+- t:  time
+- iₚ: momentum
+
+See also: `read_mode_triplets!`.
+"""
+function read_mode_triplets(mode_triplets_file)
+    # Allocate array and store mode triplets in it 
+    Φ_Ktiₚ = allocate_mode_triplets(mode_triplets_file)
+    read_mode_triplets!(mode_triplets_file, Φ_Ktiₚ)
+
+    return Φ_Ktiₚ
 end
 
 @doc raw"""

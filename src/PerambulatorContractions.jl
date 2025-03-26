@@ -20,6 +20,7 @@ LA.BLAS.set_num_threads(1)
 
 include("functions/allocate_arrays.jl")
 include("functions/contractions_meson.jl")
+include("functions/contractions_baryon.jl")
 include("functions/contractions_DD.jl")
 include("functions/contractions_dad.jl")
 include("functions/contractions_DD-dad_mixed.jl")

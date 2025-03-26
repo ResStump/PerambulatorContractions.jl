@@ -1,59 +1,66 @@
 @doc raw"""
     parse_gamma_string(s)
 
-Parse a string `s` and return the corresponding gamma matrix. The string can contain the
-following symbols:
-- "I" or "1" for the identity matrix
+Parse a string `s` and return the corresponding momomial of gamma matrices. The string can
+contain the following symbols:
+- "I" for the identity matrix
 - "G1", "G2", "G3", "G4", "G5" for the `γ₁`, `γ₂`, `γ₃`, `γ₄`, `γ₅` matrices
-- "G1G5", "G2G5", "G3G5", "G4G5" for the `γ₁*γ₅`, `γ₂*γ₅`, `γ₃*γ₅`, `γ₄*γ₅` matrices
-- "sigmaμν" for the `σ_{μν} = γ_μ*γ_ν - γ_ν*γ_μ` matrix
-- prefactors "+", "-", "i" and "C" (and combinations)
+- "sigmaμν" for the `σ_{μν} = i/2(γ_μ*γ_ν - γ_ν*γ_μ)` matrix
+- "C" for the charge conjugation matrix
+- "Pp", "Pm" for positive/negative parity projectors `0.5*(I + γ₄)`, `0.5*(I - γ₄)`
+multiplied with together with "*". 
+
+The prefactors "+", "-" and "i" (and combinations) are allowed.
 """
 function parse_gamma_string(s)
     # Dictionary mapping strings to matrices
     gamma_dict = Dict(
         "I" => I,
-        "1" => I,
+        "C" => C,
+        "Pp" => Pp,
+        "Pm" => Pm,
+        "G1" => γ[1],
+        "G2" => γ[2],
+        "G3" => γ[3],
+        "G4" => γ[4],
         "G5" => γ[5]
     )
 
-    # Add γ_μ and γ_μ*γ_5 terms terms
-    for μ in 1:4
-        gamma_dict["G$μ"] = γ[μ]
-        gamma_dict["G$(μ)G5"] = γ[μ] * γ[5]
-    end
-
     # Add σ_{\mu\nu} terms
     for μ in 1:4, ν in (μ+1):4
-        gamma_dict["sigma$μ$ν"] = σ_μν(μ, ν)
+        gamma_dict["sigma$(μ)$(ν)"] = σ_μν(μ, ν)
     end
 
-    # Handle sign, imaginary unit and charge conjugation matrix
+    # Handle sign and imaginary unit
     prefactor = 1
     
+    s = strip(s)
     if startswith(s, "-")
         prefactor *= -1
-        s = s[2:end]
+        s = strip(s[2:end])
     elseif startswith(s, "+")
-        s = s[2:end]  # Just remove the "+"
+        s = strip(s[2:end])  # Just remove the "+"
     end
     
     if startswith(s, "i")
         prefactor *= im
-        s = s[2:end]
+        s = strip(s[2:end])
     end
 
-    if startswith(s, "C")
-        prefactor *= C
-        s = s[2:end]
+    # Split into terms
+    s_arr = strip.(split(s, "*"))
+
+    # Look up the corresponding matrices in the dictionary and multiply them
+    Γ = prefactor*I
+    for s_ in s_arr
+        if haskey(gamma_dict, s_)
+            Γ *= gamma_dict[s_]
+        else
+            error("Unknown symbol: $s_")
+        end
     end
 
-    # Look up the corresponding matrix in the dictionary
-    if haskey(gamma_dict, s)
-        return prefactor * gamma_dict[s]
-    else
-        error("Unknown symbol: $s")
-    end
+    return Γ
 end
 
 @doc raw"""
@@ -133,15 +140,12 @@ function sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arr
                                iₚ_arr, p_arr)
     x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
 
-    # Number of points on spares lattice
-    N_points = size(x_sink_μiₓ_t, 2)
-
     if size(iₚ_arr) != size(p_arr)
         throw(ArgumentError("the vectors `iₚ_arr` and `p_arr` don't have the same shape."))
     end
     
     # Number of points on spares lattice
-    _, N_points, _ = size(x_sink_μiₓt)
+    N_points = size(x_sink_μiₓt, 2)
 
     # Loop over all sink time indice
     for iₜ in 1:parms.Nₜ
@@ -191,6 +195,201 @@ function sparse_mode_doublets!(Φ_sink_kltiₚ, Φ_src_kltiₚ, sparse_modes_arr
     Φ_src_kltiₚ .*= prod(parms.Nₖ)/N_points
 
     return
+end
+
+@doc raw"""
+    scalar_triple_product(a::AbstractVector, b::AbstractVector, c::AbstractVector)
+
+Compute the scalar triple product of three 3D vectors `a`, `b`, and `c`, given by 
+`a ⋅ (b × c)`.
+"""
+function scalar_triple_product(a::AbstractVector, b::AbstractVector, c::AbstractVector)
+    return @. a[1] * (b[2]*c[3] - b[3]*c[2]) +
+              a[2] * (b[3]*c[1] - b[1]*c[3]) +
+              a[3] * (b[1]*c[2] - b[2]*c[1])
+end
+
+@doc raw"""
+    sparse_mode_triplets!(Φ_sink_Ktiₚ, Φ_src_Ktiₚ, sparse_modes_arrays, iₚ_arr, p_arr)
+
+Compute the mode triplets from the sparse Laplace modes stored in `sparse_modes_arrays`.
+The result is written to `Φ_sink_Ktiₚ` and `Φ_src_Ktiₚ` for the sink and the source 
+respectively. Only the entries with the momentum indice in `iₚ_arr` for the corresponding
+momentas in `p_arr` are computed. The remaining parts of `Φ_sink_Ktiₚ` and `Φ_src_Ktiₚ`
+remain unaltered.
+"""
+function sparse_mode_triplets!(Φ_sink_Ktiₚ, Φ_src_Ktiₚ, sparse_modes_arrays, iₚ_arr, p_arr)
+    x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt = sparse_modes_arrays
+
+    if size(iₚ_arr) != size(p_arr)
+        throw(ArgumentError("the vectors `iₚ_arr` and `p_arr` don't have the same shape."))
+    end
+    
+    # Number of points on spares lattice
+    N_points = size(x_sink_μiₓt, 2)
+
+    # Precomputation for momentum projection
+    # (reshape to make p*x a vector matrix multiplication)
+    mix_sink_arr = -2π*im * (x_sink_μiₓt./reshape(parms.Nₖ, (:, 1, 1)))
+    mix_sink_arr = reshape(mix_sink_arr, (3, :))
+
+    mix_src_arr = -2π*im * (x_src_μiₓt./reshape(parms.Nₖ, (:, 1, 1)))
+    mix_src_arr = reshape(mix_src_arr, (3, :))
+
+    # Permute vectors for memory efficiency
+    v_sink_iₓtck = permutedims(v_sink_ciₓkt, [2, 4, 1, 3])
+    v_src_iₓtck = permutedims(v_src_ciₓkt, [2, 4, 1, 3])
+
+    # Compute sparse mode triplets at sink
+    K = 1
+    for k in 1:parms.N_modes
+        v_sink_k_arr = eachslice(@view(v_sink_iₓtck[:, :, :, k]), dims=3)
+        for l in k+1:parms.N_modes
+            v_sink_l_arr = eachslice(@view(v_sink_iₓtck[:, :, :, l]), dims=3)
+            for h in l+1:parms.N_modes
+                v_sink_h_arr = eachslice(@view(v_sink_iₓtck[:, :, :, h]), dims=3)
+
+                # Contract eigenmodes with epsilon tensor
+                vvv_sink_iₓt =
+                    scalar_triple_product(v_sink_k_arr, v_sink_l_arr, v_sink_h_arr)
+
+                for (iₚ, p) in zip(iₚ_arr, p_arr)
+                    # Compute exp(-ipx)
+                    mipx_sink_iₓt = reshape(p' * mix_sink_arr, N_points, parms.Nₜ)
+                    exp_mipx_sink_iₓt = exp.(mipx_sink_iₓt)
+
+                    for iₜ in 1:parms.Nₜ
+                        Φ_sink_Ktiₚ[K, iₜ, iₚ] =
+                            transpose(@view(exp_mipx_sink_iₓt[:, iₜ])) * 
+                            @view(vvv_sink_iₓt[:, iₜ])
+                    end
+                end
+
+                K += 1
+            end
+        end
+    end
+
+    # Compute sparse mode triplets at src
+    K = 1
+    for k in 1:parms.N_modes
+        v_src_k_arr = eachslice(@view(v_src_iₓtck[:, :, :, k]), dims=3)
+        for l in k+1:parms.N_modes
+            v_src_l_arr = eachslice(@view(v_src_iₓtck[:, :, :, l]), dims=3)
+            for h in l+1:parms.N_modes
+                v_src_h_arr = eachslice(@view(v_src_iₓtck[:, :, :, h]), dims=3)
+
+                # Contract eigenmodes with epsilon tensor
+                vvv_src_iₓt = scalar_triple_product(v_src_k_arr, v_src_l_arr, v_src_h_arr)
+
+                for (iₚ, p) in zip(iₚ_arr, p_arr)
+                    # Compute exp(-ipx)
+                    mipx_src_iₓt = reshape(p' * mix_src_arr, N_points, parms.Nₜ)
+                    exp_mipx_src_iₓt = exp.(mipx_src_iₓt)
+
+                    for iₜ in 1:parms.Nₜ
+                        Φ_src_Ktiₚ[K, iₜ, iₚ] = transpose(@view(exp_mipx_src_iₓt[:, iₜ])) * 
+                            @view(vvv_src_iₓt[:, iₜ])
+                    end
+                end
+
+                K += 1
+            end
+        end
+    end
+
+    # Normalization
+    Φ_sink_Ktiₚ .*= prod(parms.Nₖ)/N_points
+    Φ_src_Ktiₚ .*= prod(parms.Nₖ)/N_points
+
+    return
+end
+
+@doc raw"""
+    antisym_to_dense(Φ::AbstractVector) -> T::AbstractArray
+
+Convert an antisymmetric rank 3 tensor `Φ` which is in the mode triplets format to a dense
+rank 3 tensor `T`.
+"""
+function antisym_to_dense(Φ::AbstractVector)
+    # Check size
+    if length(parms.K_arr) != length(Φ)
+        throw(ArgumentError("size of Φ not correct"))
+    end
+
+    # Allocate dense tensor
+    T = zeros(ComplexF64, parms.N_modes, parms.N_modes, parms.N_modes)
+
+    # Permutations in S₃ and their signs
+    perms = [[1, 2, 3], [1, 3, 2], [2, 1, 3], [2, 3, 1], [3, 1, 2], [3, 2, 1]]
+    signs = [1, -1, -1, 1, 1, -1]
+
+    # Loop over the elements of Φ
+    for K in eachindex(Φ)
+        # Loop over the permutations
+        for (sgn, perm) in zip(signs, perms)
+            # Get the indices
+            k, l, h = parms.K_arr[K][perm]
+
+            # Store entry
+            T[k, l, h] = sgn * Φ[K]
+        end
+    end
+
+    return T
+end
+
+@doc raw"""
+    antisym_contraction(Φ::AbstractVector, T::AbstractArray, idx::Int) -> AbstractArray
+
+Compute the contraction of a tensor `T` along the `idx`-th dimension with a antisymmetric
+rank 3 tensor `Φ` which is in the mode triplets format. The retuned tensor has the free
+indices of `T` (in the same order) and the two antisymmetric indices as the last indices.
+"""
+function antisym_contraction(Φ::AbstractVector, T::AbstractArray, idx::Int)
+    # Check if the index is valid
+    if idx < 1 || idx > length(T)
+        throw(ArgumentError("index out of bounds"))
+    end
+
+    # Check sizes
+    if parms.N_modes != size(T, idx)
+        throw(ArgumentError("size of Φ not correct"))
+    end
+    if length(parms.K_arr) != length(Φ)
+        throw(ArgumentError("size of T not correct"))
+    end
+
+    # Make idx slowest index
+    T = permutedims(T, ((1:idx-1)..., (idx+1:ndims(T)...), idx))
+    res_size = (size(T)..., parms.N_modes)
+
+    # Reshape to rank 2 tensor to use axpy!
+    T_ = reshape(T, (:, parms.N_modes))
+
+    # Allocate result
+    T_res_ = zeros(ComplexF64, size(T_)..., parms.N_modes)
+    
+    # Permutations in S₃ and their signs
+    perms = [[1, 2, 3], [1, 3, 2], [2, 1, 3], [2, 3, 1], [3, 1, 2], [3, 2, 1]]
+    signs = [1, -1, -1, 1, 1, -1]
+
+    # Loop over the elements of Φ
+    for K in eachindex(Φ)
+        # Loop over the permutations
+        for (sgn, perm) in zip(signs, perms)
+            # Get the indices
+            k, l, h = parms.K_arr[K][perm]
+
+            # Multiply tensors
+            LA.axpy!(sgn * Φ[K], @view(T_[:, k]), @view(T_res_[:, l, h]))
+        end
+    end
+
+    # Reshape to original shape
+    T_res = reshape(T_res_, res_size)
+
+    return T_res
 end
 
 @doc raw"""

@@ -1,17 +1,20 @@
 PrecompileTools.@setup_workload begin
     # Set parameters
     parms_toml_string = ""
-    perambulator_dir, perambulator_charm_dir, mode_doublets_dir = "", "", ""
+    perambulator_dir, perambulator_charm_dir, mode_doublets_dir, mode_triplets_dir =
+        "", "", "", ""
     sparse_modes_dir, result_dir = "", ""
     cnfg_numbers, tsrc_arr = zeros(Int, 1), zeros(Int, 1, 1)
     Nₜ, Nₖ, N_modes = 16, [8, 8, 8], 10
     N_cnfg, N_src = 1, 1
     p_arr = [[1, 0, 0]]
+    K_arr = [Int[]]
     N_ranks_per_cnfg = 1
 
     parms = Parms(parms_toml_string, perambulator_dir, perambulator_charm_dir,
-                  mode_doublets_dir, sparse_modes_dir, result_dir, cnfg_numbers, tsrc_arr,
-                  Nₜ, Nₖ, N_modes, N_cnfg, N_src, [1], p_arr, N_ranks_per_cnfg)
+                  mode_doublets_dir, mode_triplets_dir, sparse_modes_dir, result_dir,
+                  cnfg_numbers, tsrc_arr, Nₜ, Nₖ, N_modes, N_cnfg, N_src, [1], p_arr,
+                  K_arr, N_ranks_per_cnfg)
     
     # Number of points on spares lattice
     N_points = 8
