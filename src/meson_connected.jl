@@ -121,7 +121,7 @@ corr_file_path() = PC.parms.result_dir/"$(PC.parms_toml["Run name"]["name"])_" *
             "$(PC.parms.N_modes)modes_meson_connected_$(flavour)_$(method_str()).hdf5"
 corr_tmp_file_path() = PC.parms.result_dir/"$(PC.parms_toml["Run name"]["name"])_" *
             "$(PC.parms.N_modes)modes_meson_connected_$(flavour)_$(method_str())_" *
-            "tmp$(myrank).hdf5"
+            "tmp$(comm_number).hdf5"
 
 function write_correlator(; tmp=false)
     if tmp
