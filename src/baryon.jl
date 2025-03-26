@@ -310,7 +310,7 @@ function compute_contractions!(i_src, t₀, i_cnfg)
         # Distribute workload and compute contraction
         if my_cnfg_rank == 0
             corr = PC.mpi_broadcast(contractions, all_arrays..., comm=cnfg_comm,
-                                      log_prefix="      ")
+                                      log_prefix="        ")
         else
             PC.mpi_broadcast(contractions, comm=cnfg_comm)
         end
