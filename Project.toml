@@ -1,7 +1,7 @@
 name = "PerambulatorContractions"
 uuid = "a7d622fa-7075-485b-a69e-58a92e309e85"
 authors = ["Andres Stump <andres.stump@hu-berlin.de>"]
-version = "1.8.0"
+version = "1.8.1"
 
 [deps]
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
