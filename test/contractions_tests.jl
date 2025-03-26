@@ -1,8 +1,8 @@
 # Add infile manually to arguments
-pushfirst!(ARGS, "-i", "16x8v1_parameter_files/pseudoscalar_16x8v1.toml")
+pushfirst!(ARGS, "-i", "16x8v1_parameter_files/16x8v1.toml")
 
 # Read parameters from infile
-PC.read_parameters()
+PC.read_parameters(:meson)
 
 
 # Paths to files
