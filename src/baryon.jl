@@ -90,33 +90,33 @@ else
     throw(ArgumentError("correlator method is not valid! Choose \"full\" or \"sparse\""))
 end
 
-# Detemine the required momenta
-p²_arr = PC.parms_toml["Momenta"]["p_sq"]
-p_arrs = Vector{Vector{Vector{Int}}}(undef, length(p²_arr))
-for (i, p²) in enumerate(p²_arr)
-    p_arrs[i] = PC.parms.p_arr[findall(p -> p'*p == p², PC.parms.p_arr)]
-    if isempty(p_arrs[i])
-        throw(DomainError("a chosen momentum `p²` is not contained in the mode triplets"))
-    end
+# Momenta
+#########
+
+# Determine the momenta
+mom_type = PC.parms_toml["Momenta"]["type"]
+if mom_type == "all"
+    p_arr = PC.parms.p_arr
+    mom_type = "p"
+elseif mom_type == "p"
+    p_arr = PC.parms_toml["Momenta"]["p"]
+elseif mom_type == "p_sq"
+    # Use all momenta with p² in p²_arr
+    p²_arr = PC.parms_toml["Momenta"]["p_sq"]
+    p_arr = [p for p in PC.parms.p_arr if p'*p in p²_arr]
+    N_p²_arr = [count(p -> p'*p==p², p_arr) for p² in p²_arr] # Number of momenta with p²
+else
+    throw(ArgumentError("momentum type is not valid! Choose \"all\", \"p\" or \"p_sq\""))
 end
 
-# Momentum indices in mode triplets corresponding to the momenta in p_arrs
-iₚ_arrs = Vector{Vector{Int}}(undef, length(p_arrs))
+# Momentum indices in mode triplets corresponding to the momentas in p_arr
 if method == "full"
-    for (i, p_arr_) in enumerate(p_arrs)
-        iₚ_arrs[i] = [findfirst(==(p), PC.parms.p_arr) for p in p_arr_]
+    iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
+    if any(isnothing.(iₚ_arr))
+        throw(DomainError("a chosen momentum `p` is not contained in the mode triplets."))
     end
 elseif method == "sparse"
-    # Flatten p_arrs (for computing sparse mode triplets)
-    p_arr = collect(Iterators.flatten(p_arrs))
-
     iₚ_arr = eachindex(p_arr)
-    let idx = 1
-        for (i, len) in enumerate(length.(p_arrs))
-            iₚ_arrs[i] = iₚ_arr[idx:idx+len-1]
-            idx += len
-        end
-    end
 end
 
 
@@ -148,14 +148,32 @@ function write_correlator(; tmp=false)
         file = HDF5.h5open(string(corr_file_path()), "w")
     end
 
-    # Write correlator with dimension labels
-    if direction == "full"
-        # Remove forward/backward dimension
-        file["Correlator"] = C_tdnp²t₀c[:, 1, :, :, :, :]
+    # Loop over all momenta
+    if mom_type == "p_sq"
+        for (i_p², p²) in enumerate(p²_arr)
+            # Write correlator with dimension labels
+            if direction == "full"
+                # Remove forward/backward dimension
+                file["Correlators/p_sq$p²"] = C_tdnpt₀c[:, 1, :, i_p², :, :]
+            else
+                file["Correlators/p_sq$p²"] = C_tdnpt₀c[:, :, :, i_p², :, :]
+            end
+            HDF5.attrs(file["Correlators/p_sq$p²"])["DIMENSION_LABELS"] = labels
+        end
     else
-        file["Correlator"] = C_tdnp²t₀c
+        for (i_p, p) in enumerate(p_arr)
+            p_str = join(p, ",")
+    
+            # Write correlator with dimension labels
+            if direction == "full"
+                # Remove forward/backward dimension
+                file["Correlators/p$p_str"] = C_tdnpt₀c[:, 1, :, i_p, :, :]
+            else
+                file["Correlators/p$p_str"] = C_tdnpt₀c[:, :, :, i_p, :, :]
+            end
+            HDF5.attrs(file["Correlators/p$p_str"])["DIMENSION_LABELS"] = labels
+        end
     end
-    HDF5.attrs(file["Correlator"])["DIMENSION_LABELS"] = labels
 
     # Write spin structure
     file["Spin Structure/Gamma"] = stack(Γ_tuple_labels)
@@ -215,20 +233,37 @@ if my_cnfg_rank == 0
         time_shape = (PC.parms.Nₜ, 1)
         time_labels = ["t"]
     end
-    correlator_size = (time_shape..., Nᵧ, length(p²_arr), PC.parms.N_src, PC.parms.N_cnfg)
-    C_tdnp²t₀c = zeros(ComplexF64, correlator_size)
-    labels = ["config", "source", "Gamma", "p_sq", time_labels...]
+    if mom_type == "p_sq"
+        mom_length = length(p²_arr)
+    else
+        mom_length = length(p_arr)
+    end
+    correlator_size = (time_shape..., Nᵧ, mom_length, PC.parms.N_src, PC.parms.N_cnfg)
+    C_tdnpt₀c = zeros(ComplexF64, correlator_size)
+    labels = ["config", "source", "Gamma", time_labels...]
 
     # Read correlator file if continuation run
     if continuation_run
         file = HDF5.h5open(string(corr_tmp_file_path()))
 
         @time "Read tmp file" begin
-            # Write correlator with dimension labels
-            if direction == "full"
-                C_tdnp²t₀c[:, 1, :, :, :, :] = read(file["Correlator"])
+            if mom_type == "p_sq"
+                for (i_p², p²) in enumerate(p²_arr)  
+                    if direction == "full"
+                        C_tdnpt₀c[:, 1, :, i_p², :, :] = read(file["Correlators/p_sq$p²"])
+                    else
+                        C_tdnpt₀c[:, :, :, i_p², :, :] = read(file["Correlators/p_sq$p²"])
+                    end
+                end
             else
-                C_tdnp²t₀c .= read(file["Correlator"])
+                for (i_p, p) in enumerate(p_arr)  
+                    p_str = join(p, ",")
+                    if direction == "full"
+                        C_tdnpt₀c[:, 1, :, i_p, :, :] = read(file["Correlators/p$p_str"])
+                    else
+                        C_tdnpt₀c[:, :, :, i_p, :, :] = read(file["Correlators/p$p_str"])
+                    end
+                end
             end
         end
         println()
@@ -290,21 +325,33 @@ function compute_contractions!(i_src, t₀, i_cnfg)
 
         # Function to compute contractions
         contractions = (τ₁, τ₂, τ₃, Φ_t, Φ_t₀, trev) -> begin
-            C_np² = zeros(ComplexF64, Nᵧ, length(p²_arr))
+            if mom_type == "p_sq"
+                C_np = zeros(ComplexF64, Nᵧ, length(p²_arr))
+            else
+                C_np = zeros(ComplexF64, Nᵧ, length(p_arr))
+            end
 
-            # Loop over all p²
-            for (i_p², iₚ_arr_) in enumerate(iₚ_arrs)
-                # Compute contractions for each momentum with the same p²
-                for iₚ in iₚ_arr_
-                    C_np²[:, i_p²] += PC.baryon_contractions(
-                        τ₁, τ₂, τ₃, Φ_t, Φ_t₀, Γ_tuple_arr, iₚ, flavour, trev[]
-                    )
+            # Loop over all momenta
+            for (i_p, (iₚ, p)) in enumerate(zip(iₚ_arr, p_arr))
+                if mom_type == "p_sq"
+                    idx_p = findfirst(==(p'*p), p²_arr)
+                else
+                    idx_p = i_p
                 end
-                C_np²[:, i_p²] /= length(iₚ_arr_)
+                
+                C_np[:, idx_p] += PC.baryon_contractions(
+                    τ₁, τ₂, τ₃, Φ_t, Φ_t₀, Γ_tuple_arr, iₚ, flavour, trev[]
+                )
+            end
+
+            if mom_type == "p_sq"
+                for (i_p², N_p²) in enumerate(N_p²_arr)
+                    C_np[:, i_p²] /= N_p²
+                end
             end
 
             # Return as contiguous arrays
-            return C_np²
+            return C_np
         end
 
         # Distribute workload and compute contraction
@@ -319,12 +366,12 @@ function compute_contractions!(i_src, t₀, i_cnfg)
         if my_cnfg_rank == 0
             if direction == "forward/backward"
                 for iₜ in 1:nₜ
-                    C_tdnp²t₀c[iₜ, 1, :, :, i_src, i_cnfg] = signs[iₜ] * corr[iₜ]
-                    C_tdnp²t₀c[iₜ, 2, :, :, i_src, i_cnfg] = signs[nₜ+iₜ] * corr[nₜ+iₜ]
+                    C_tdnpt₀c[iₜ, 1, :, :, i_src, i_cnfg] = signs[iₜ] * corr[iₜ]
+                    C_tdnpt₀c[iₜ, 2, :, :, i_src, i_cnfg] = signs[nₜ+iₜ] * corr[nₜ+iₜ]
                 end
             else
                 for (iₜ, corr_t) in enumerate(corr)
-                    C_tdnp²t₀c[iₜ, 1, :, :, i_src, i_cnfg] = signs[iₜ] * corr_t
+                    C_tdnpt₀c[iₜ, 1, :, :, i_src, i_cnfg] = signs[iₜ] * corr_t
                 end
             end
         end
@@ -404,7 +451,7 @@ function main()
 
     if my_cnfg_rank == 0
         @time "Send correlators to root" begin
-            MPI.Reduce!(C_tdnp²t₀c, MPI.SUM, cnfg_root_comm, root=0)
+            MPI.Reduce!(C_tdnpt₀c, MPI.SUM, cnfg_root_comm, root=0)
         end
     end
 
