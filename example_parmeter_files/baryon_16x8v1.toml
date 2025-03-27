@@ -13,6 +13,10 @@ result_dir = "results"
 N_t     = 16
 N_k     = [8, 8, 8]
 
+["Correlator shape"]
+direction       = "forward/backward"    # "forward", "backward", "forward/backward" or "full"
+n_timeslices    = 32
+
 ["Configurations"]
 first   = 1
 last    = 10
@@ -31,7 +35,10 @@ Gamma = [["Pp", "C*G5"], ["Pp", "C*G5*Pp"]]
 flavour = "uud" # "uds" or "uud"
 
 ["Momenta"]
+type = "p_sq" # "p_sq", "p" or "all"
 p_sq = [0, 1]
+p = [[0, 0, 0],
+     [1, 0, 0]]
 
 ["Correlator"]
 method          = "full"  # "full" or "sparse"
