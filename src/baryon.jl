@@ -297,8 +297,15 @@ function compute_contractions!(i_src, t₀, i_cnfg)
                 iₜ_range = i_t₀ .+ (0:PC.parms.Nₜ-1)
                 trev_arr = fill([false], PC.parms.Nₜ)
             end
-            # Signs from antiperiodic boundary conditions
-            signs = map(i -> 1<=i<=PC.parms.Nₜ ? 1 : -1, iₜ_range)
+            if PC.parms_toml["Geometry"]["boundary_conditions"] == "antiperiodic"
+                # Signs from antiperiodic boundary conditions
+                signs = map(i -> 1<=i<=PC.parms.Nₜ ? 1 : -1, iₜ_range)
+            elseif PC.parms_toml["Geometry"]["boundary_conditions"] == "open"
+                signs = fill(1, length(iₜ_range))
+            else
+                throw(ArgumentError("Invalid boundary conditions: " *
+                    "$(PC.parms_toml["Geometry"]["boundary_conditions"])"))
+            end
 
             iₜ_range = mod1.(iₜ_range, PC.parms.Nₜ)
 
