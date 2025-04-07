@@ -1,5 +1,5 @@
 @doc raw"""
-    meson_connected_contractions(τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Φ_kliₚ_t::AbstractArray, Φ_kliₚ_t₀::AbstractArray, Γ_arr::AbstractArray, iₚ::Integer, full_corr_matrix::Bool; neg_sign::Bool=true)
+    meson_connected_contractions(τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray, Φ_kliₚ_t::AbstractArray, Φ_kliₚ_t₀::AbstractArray, Γ_arr::AbstractVector{<:AbstractMatrix}, iₚ::Integer, full_corr_matrix::Bool)
 
 Contract the perambulators `τ₁_αkβl_t` and `τ₂_αkβl_t` and the mode doublets `Φ_kliₚ_t` and
 `Φ_kliₚ_t₀` to get connected meson correlators where `τ₁_αkβlt` is used to propagate in
@@ -11,14 +11,11 @@ correlator matrix \
 of them. Otherwise, only compute the diagonal matrix entries.
 
 The momentum index `iₚ` is used for the momentum projection.
-
-If `neg_sign=true` (default) multiply the correlator matrix with `-1` (convention).
 """
 function meson_connected_contractions(
     τ₁_αkβlt::AbstractArray, τ₂_αkβlt::AbstractArray,
     Φ_kliₚ_t::AbstractArray, Φ_kliₚ_t₀::AbstractArray,
-    Γ_arr::AbstractArray{<:AbstractMatrix}, iₚ::Integer, full_corr_matrix::Bool;
-    neg_sign::Bool=true
+    Γ_arr::AbstractVector{<:AbstractMatrix}, iₚ::Integer, full_corr_matrix::Bool
 )
     # Number of gamma matrices
     Nᵧ = length(Γ_arr)
@@ -59,12 +56,8 @@ function meson_connected_contractions(
         γ₅Γ_n = IT.itensor(γ₅Γ_αβn, α, α', n)
         Γbarγ₅_n̄ = IT.itensor(Γbarγ₅_αβn, β', β, n̄)
 
-        C_nn̄ = τ₁Φτ₂Φ * Γbarγ₅_n̄ * γ₅Γ_n
+        C_nn̄ = -τ₁Φτ₂Φ * Γbarγ₅_n̄ * γ₅Γ_n
 
-        # Sign flip flip
-        if neg_sign
-            C_nn̄ = -C_nn̄
-        end
         return IT.array(C_nn̄, n, n̄)
     else
         # Initialize array for diagonal elements
@@ -75,13 +68,9 @@ function meson_connected_contractions(
             γ₅Γ_n = IT.itensor(@view(γ₅Γ_αβn[:, :, n]), α, α')
             Γbarγ₅_n = IT.itensor(@view(Γbarγ₅_αβn[:, :, n]), β', β)
 
-            C_n[n] = IT.scalar(τ₁Φτ₂Φ * γ₅Γ_n * Γbarγ₅_n)
+            C_n[n] = -IT.scalar(τ₁Φτ₂Φ * γ₅Γ_n * Γbarγ₅_n)
         end
 
-        # Sign flip flip
-        if neg_sign
-            C_n .= .-C_n
-        end
         return C_n
     end
 end
@@ -109,7 +98,7 @@ function generate_meson_connected_contract_func(Γ::AbstractMatrix, Γbar::Abstr
     D₁⁻¹_ = IT.itensor(collect(D₁⁻¹), α', a, β', b)
     D₂⁻¹_ = IT.itensor(collect(D₂⁻¹), β, b, α, a)
 
-    C = IT.scalar((Γ_ * D₁⁻¹_) * (Γbar_ * D₂⁻¹_))
+    C = -IT.scalar((Γ_ * D₁⁻¹_) * (Γbar_ * D₂⁻¹_))
 
     contract_real = eval(Symbolics.build_function(real(C), D₁⁻¹, D₂⁻¹))
     contract_imag = eval(Symbolics.build_function(imag(C), D₁⁻¹, D₂⁻¹))
@@ -119,7 +108,7 @@ function generate_meson_connected_contract_func(Γ::AbstractMatrix, Γbar::Abstr
 end
 
 @doc raw"""
-    meson_connected_sparse_contractions(τ₁_αkβl_t::AbstractArray, τ₂_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, p_arr::AbstractVector{<:AbstractVector}, contract_arr::AbstractVecOrMat{<:Function}, full_corr_matrix::Bool; neg_sign::Bool=true) -> corr_matrix
+    meson_connected_sparse_contractions(τ₁_αkβl_t::AbstractArray, τ₂_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, p_arr::AbstractVector{<:AbstractVector}, contract_arr::AbstractVecOrMat{<:Function}, full_corr_matrix::Bool) -> corr_matrix
 
 Contract the perambulators `τ₁_αkβl_t` and `τ₂_αkβl_t` and the sparse Laplace modes in
 `sparse_modes_arrays_tt₀` to get connected meson correlators where `τ₁_αkβlt` is used to
@@ -135,14 +124,12 @@ If `full_corr_matrix == true` compute the full correlator matrix `C_tnn̄iₚ`. 
 `contract_arr` must be a square matrix where every entry corresponds to on paire
 `(Γ_n, Γbar_n̄)`. Otherwise, only compute the diagonal matrix entries. Then, `contract_arr`
 must be a vector.
-
-If `neg_sign=true` (default) multiply the correlator matrix with `-1` (convention).
 """
 function meson_connected_sparse_contractions(
     τ₁_αkβl_t::AbstractArray, τ₂_αkβl_t::AbstractArray,
     sparse_modes_arrays_tt₀::NTuple{4, AbstractArray},
     p_arr::AbstractVector{<:AbstractVector},
-    contract_arr::AbstractVecOrMat{<:Function}, full_corr_matrix::Bool; neg_sign::Bool=true
+    contract_arr::AbstractVecOrMat{<:Function}, full_corr_matrix::Bool
 )
     # Unpack sparse modes arrays
     x_sink_μiₓ_t, x_src_μiₓ_t₀, v_sink_ciₓk_t, v_src_ciₓk_t₀ = sparse_modes_arrays_tt₀
@@ -165,7 +152,7 @@ function meson_connected_sparse_contractions(
     b = IT.Index(3, "b")
     α = IT.Index(4, "α")
     β = IT.Index(4, "β")
-    iₓ = IT.Index(N_points, "iₓ")
+    iₓ_ = IT.Index(N_points, "iₓ")
     k = IT.Index(N_modes, "k")
     l = IT.Index(N_modes, "l")
     n = IT.Index(Nᵧ, "n")
@@ -179,7 +166,7 @@ function meson_connected_sparse_contractions(
     τ₂_bw_t = IT.itensor(γ[5], β, β') * conj(τ₂_t) * IT.itensor(γ[5], α', α)
 
     # Laplace modes for all iₓ'
-    v_sink_t = IT.itensor(v_sink_ciₓk_t, a, iₓ', k)
+    v_sink_t = IT.itensor(v_sink_ciₓk_t, a, iₓ_', k)
 
     # Precontraction for smeared propagator 1
     vτ₁ = v_sink_t * τ₁_t
@@ -197,9 +184,9 @@ function meson_connected_sparse_contractions(
 
     # Preallocate smeared propagators
     D₁⁻¹_αaβbiₓ′_iₓ = Array{ComplexF64}(undef, 4, 3, 4, 3, N_points)
-    D₁⁻¹_iₓ = IT.itensor(D₁⁻¹_αaβbiₓ′_iₓ, α, a, β, b, iₓ')
+    D₁⁻¹_iₓ = IT.itensor(D₁⁻¹_αaβbiₓ′_iₓ, α, a, β, b, iₓ_')
     D₂⁻¹_αaβbiₓ′_iₓ = Array{ComplexF64}(undef, 4, 3, 4, 3, N_points)
-    D₂⁻¹_iₓ = IT.itensor(D₂⁻¹_αaβbiₓ′_iₓ, α, a, β, b, iₓ')
+    D₂⁻¹_iₓ = IT.itensor(D₂⁻¹_αaβbiₓ′_iₓ, α, a, β, b, iₓ_')
 
     # Loop over source position iₓ
     for iₓ in 1:N_points
@@ -245,21 +232,11 @@ function meson_connected_sparse_contractions(
         # Normalization
         C_iₚnn̄ .*= (prod(parms.Nₖ)/N_points)^2
 
-        # Sign flip
-        if neg_sign
-            C_iₚnn̄ .*= -1
-        end
-
         # Make momentum index the last
         return permutedims(C_iₚnn̄, (2, 3, 1))
     else
         # Normalization
         C_iₚn .*= (prod(parms.Nₖ)/N_points)^2
-
-        # Sign flip
-        if neg_sign
-            C_iₚn .*= -1
-        end
 
         # Make momentum index the last
         return permutedims(C_iₚn, (2, 1))
