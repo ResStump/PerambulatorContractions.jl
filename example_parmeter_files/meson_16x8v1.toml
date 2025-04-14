@@ -6,7 +6,6 @@ perambulator_dir    = "perambulator_dir"
 perambulator_charm_dir    = "perambulator_dir"
 mode_doublets_dir   = "mode_doublets_dir"
 sparse_modes_dir    = "sparse_modes_dir"
-sparse_modes_dir_new = "sparse_modes_dir_new"   # only needed for modes_increase_separation.jl
 tsrc_list   = ""
 result_dir = "results"
 

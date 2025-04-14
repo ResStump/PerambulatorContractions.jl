@@ -1,7 +1,7 @@
 # %%########################################################################################
 # meson_connected.jl
 #
-# Compute connected meson correlators from perambulators and mode doublets and sparse modes
+# Compute connected meson correlators from perambulators, and mode doublets or sparse modes
 # where the contractions are done in parallel using MPI.jl.
 #
 # Usage:
@@ -38,7 +38,7 @@ end
 ###################
 
 # Set global parameters
-PC.read_parameters()
+PC.read_parameters(:meson)
 
 # Split communicators
 cnfg_comm, comm_number, my_cnfgs = PC.cnfg_comm()
@@ -91,6 +91,25 @@ else
     p_arr = PC.parms_toml["Momenta"]["p"]
 end
 
+# Momenta
+#########
+
+# Determine the momenta
+mom_type = PC.parms_toml["Momenta"]["type"]
+if mom_type == "all"
+    p_arr = PC.parms.p_arr
+    mom_type = "p"
+elseif mom_type == "p"
+    p_arr = PC.parms_toml["Momenta"]["p"]
+elseif mom_type == "p_sq"
+    # Use all momenta with p² in p²_arr
+    p²_arr = PC.parms_toml["Momenta"]["p_sq"]
+    p_arr = [p for p in PC.parms.p_arr if p'*p in p²_arr]
+    N_p²_arr = [count(p -> p'*p==p², p_arr) for p² in p²_arr] # Number of momenta with p²
+else
+    throw(ArgumentError("momentum type is not valid! Choose \"all\", \"p\" or \"p_sq\""))
+end
+
 # Momentum indices in mode doublets corresponding to the momentas in p_arr
 if method == "full"
     iₚ_arr = [findfirst(p_ -> p_ == p, PC.parms.p_arr) for p in p_arr]
@@ -131,16 +150,28 @@ function write_correlator(; tmp=false)
     end
 
     # Loop over all momentuma
-    for (iₚ, p) in enumerate(p_arr)
-        p_str = join(p, ",")
-
-        # Write correlator with dimension labels
-        if corr_matrix_type == "full"
-            file["Correlators/p$p_str"] = C_tnn̄t₀ciₚ[:, :, :, :, :, iₚ]
-        elseif corr_matrix_type == "diag"
-            file["Correlators/p$p_str"] = C_tnt₀ciₚ[:, :, :, :, iₚ]
+    if mom_type == "p_sq"
+        for (i_p², p²) in enumerate(p²_arr)
+            # Write correlator with dimension labels
+            if corr_matrix_type == "full"
+                file["Correlators/p_sq$p²"] = C_tnn̄t₀ciₚ[:, :, :, :, :, i_p²]
+            elseif corr_matrix_type == "diag"
+                file["Correlators/p_sq$p²"] = C_tnt₀ciₚ[:, :, :, :, i_p²]
+            end
+            HDF5.attrs(file["Correlators/p_sq$p²"])["DIMENSION_LABELS"] = labels
         end
-        HDF5.attrs(file["Correlators/p$p_str"])["DIMENSION_LABELS"] = labels
+    else
+        for (i_p, p) in enumerate(p_arr)
+            p_str = join(p, ",")
+
+            # Write correlator with dimension labels
+            if corr_matrix_type == "full"
+                file["Correlators/p$p_str"] = C_tnn̄t₀ciₚ[:, :, :, :, :, i_p]
+            elseif corr_matrix_type == "diag"
+                file["Correlators/p$p_str"] = C_tnt₀ciₚ[:, :, :, :, i_p]
+            end
+            HDF5.attrs(file["Correlators/p$p_str"])["DIMENSION_LABELS"] = labels
+        end
     end
 
     # Write spin structure
@@ -193,13 +224,18 @@ if my_cnfg_rank == 0
 
     # Correlator and its labels for writing it (order of labels reversed in Julia)
     # (initialize correlators with zeros to use MPI.Reduce for the communication)
+    if mom_type == "p_sq"
+        mom_length = length(p²_arr)
+    else
+        mom_length = length(p_arr)
+    end
     if corr_matrix_type == "full"
         correlator_size = 
-            (PC.parms.Nₜ, Nᵧ, Nᵧ, PC.parms.N_src, PC.parms.N_cnfg, length(p_arr))
+            (PC.parms.Nₜ, Nᵧ, Nᵧ, PC.parms.N_src, PC.parms.N_cnfg, mom_length)
         C_tnn̄t₀ciₚ = zeros(ComplexF64, correlator_size)
         labels = ["config", "source", "Gamma bar", "Gamma", "t"]
     elseif corr_matrix_type == "diag"
-        correlator_size = (PC.parms.Nₜ, Nᵧ, PC.parms.N_src, PC.parms.N_cnfg, length(p_arr))
+        correlator_size = (PC.parms.Nₜ, Nᵧ, PC.parms.N_src, PC.parms.N_cnfg, mom_length)
         C_tnt₀ciₚ = zeros(ComplexF64, correlator_size)
         labels = ["config", "source", "Gamma", "t"]
     end
@@ -210,14 +246,25 @@ if my_cnfg_rank == 0
 
         # Loop over all momentuma
         @time "Read tmp file" begin
-            for (iₚ, p) in enumerate(p_arr)
-                p_str = join(p, ",")
-        
-                # Write correlator with dimension labels
-                if corr_matrix_type == "full"
-                    C_tnn̄t₀ciₚ[:, :, :, :, :, iₚ] = read(file["Correlators/p$p_str"])
-                elseif corr_matrix_type == "diag"
-                    C_tnt₀ciₚ[:, :, :, :, iₚ] = read(file["Correlators/p$p_str"])
+            if mom_type == "p_sq"
+                for (i_p², p²) in enumerate(p²_arr)  
+                    # Write correlator with dimension labels
+                    if corr_matrix_type == "full"
+                        C_tnn̄t₀ciₚ[:, :, :, :, :, i_p²] = read(file["Correlators/p_sq$p²"])
+                    elseif corr_matrix_type == "diag"
+                        C_tnt₀ciₚ[:, :, :, :, i_p²] = read(file["Correlators/p_sq$p²"])
+                    end
+                end
+            else
+                for (iₚ, p) in enumerate(p_arr)
+                    p_str = join(p, ",")
+            
+                    # Write correlator with dimension labels
+                    if corr_matrix_type == "full"
+                        C_tnn̄t₀ciₚ[:, :, :, :, :, iₚ] = read(file["Correlators/p$p_str"])
+                    elseif corr_matrix_type == "diag"
+                        C_tnt₀ciₚ[:, :, :, :, iₚ] = read(file["Correlators/p$p_str"])
+                    end
                 end
             end
         end
@@ -269,18 +316,51 @@ function compute_contractions!(i_src, t₀, i_cnfg)
 
         # Function to compute contractions
         contractions = (τ₁, τ₂, Φ_t, Φ_t₀) -> begin
-            C_arr = []
-
-            # Loop over all momentum indices
-            for iₚ in iₚ_arr
-                C = PC.meson_connected_contractions(
-                    τ₁, τ₂, Φ_t, Φ_t₀, Γ_arr, iₚ, corr_matrix_type=="full"
-                )
-                push!(C_arr, C)
+            if mom_type == "p_sq"
+                mom_length = length(p²_arr)
+            else
+                mom_length = length(p_arr)
+            end
+            if corr_matrix_type == "full"
+                C_nn̄p = zeros(ComplexF64, Nᵧ, Nᵧ, mom_length)
+            else
+                C_np = zeros(ComplexF64, Nᵧ, mom_length)
             end
 
-            # Return as contiguous arrays
-            return stack(C_arr)
+            # Loop over all momenta
+            for (i_p, (iₚ, p)) in enumerate(zip(iₚ_arr, p_arr))
+                if mom_type == "p_sq"
+                    idx_p = findfirst(==(p'*p), p²_arr)
+                else
+                    idx_p = i_p
+                end
+
+                if corr_matrix_type == "full"
+                    C_nn̄p[:, :, idx_p] += PC.meson_connected_contractions(
+                        τ₁, τ₂, Φ_t, Φ_t₀, Γ_arr, iₚ, true
+                    )
+                else
+                    C_np[:, idx_p] += PC.meson_connected_contractions(
+                        τ₁, τ₂, Φ_t, Φ_t₀, Γ_arr, iₚ, false
+                    )
+                end
+            end
+
+            if mom_type == "p_sq"
+                for (i_p², N_p²) in enumerate(N_p²_arr)
+                    if corr_matrix_type == "full"
+                        C_nn̄p[:, :, i_p²] /= N_p²
+                    else
+                        C_np[:, i_p²] /= N_p²
+                    end
+                end
+            end
+
+            if corr_matrix_type == "full"
+                return C_nn̄p
+            else
+                return C_np
+            end
         end
 
         # Distribute workload and compute contraction
