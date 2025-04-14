@@ -5,6 +5,7 @@ name    = "16x8v1"
 perambulator_dir    = "perambulator_dir"
 perambulator_charm_dir    = "perambulator_dir"
 mode_doublets_dir   = "mode_doublets_dir"
+mode_triplets_dir   = "mode_triplets_dir"
 sparse_modes_dir    = "sparse_modes_dir"
 tsrc_list   = ""
 result_dir = "results"
@@ -32,8 +33,10 @@ corr_matrix_type = "full" # "full" or "diag"
 flavour = "llbar" # "llbar" or "clbar"
 
 ["Momenta"]
+type = "p_sq" # "p_sq", "p" or "all"
 p       = [[0, 0, 0],
-           [1, 0, 0]] # or "all"
+           [1, 0, 0]]
+p_sq = [0, 1] # [0, 1]
 
 ["Correlator"]
 method          = "full"  # "full" or "sparse"
