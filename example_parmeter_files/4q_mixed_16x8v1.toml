@@ -31,8 +31,9 @@ label_light      = "perambulator_light_tsrc"
 label_charm      = "perambulator_light_tsrc"
 
 ["Momenta nonlocal"]
-Ptot_sq = [0]
+Ptot_sq      = [0]
 p_sq_sum_max = [2]
+chunk_size = "full" # Integer or "full"
 
 ["Various"]
 continuation_run = false
