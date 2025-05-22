@@ -395,10 +395,10 @@ function main()
                         end
                     end
                     println()
-                end
 
-                # Run garbage collector (fully)
-                GC.gc()
+                    # Run garbage collector (fully)
+                    GC.gc()
+                end
 
                 println()
             end
