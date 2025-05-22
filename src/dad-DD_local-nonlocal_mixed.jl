@@ -86,12 +86,17 @@ p_sq_sum_max_arr = PC.parms_toml["Momenta nonlocal"]["p_sq_sum_max"]
 
 # Compute all (relevant) momentum index pairs
 Iₚ_nonlocal_arr = []
-Ptot_arr = Vector{Int}[]
 for (Ptot_sq, p_sq_sum_max) in zip(Ptot_sq_arr, p_sq_sum_max_arr)
-    Iₚ_arr, Ptot_arr_ = PC.generate_momentum_pairs(Ptot_sq, p_sq_sum_max, ret_Ptot=true)
+    Iₚ_arr = PC.generate_momentum_pairs(Ptot_sq, p_sq_sum_max)
     append!(Iₚ_nonlocal_arr, Iₚ_arr)
-    append!(Ptot_arr, Ptot_arr_)
 end
+
+# Divide up momenta into chunks
+mom_chunk_size = PC.parms_toml["Momenta nonlocal"]["chunk_size"]
+if mom_chunk_size == "full"
+    global mom_chunk_size = length(Iₚ_nonlocal_arr)
+end
+Iₚ_nonlocal_chunk_arr = collect(Iterators.partition(Iₚ_nonlocal_arr, mom_chunk_size))
 
 
 # %%############
@@ -110,14 +115,18 @@ mode_doublets_file(n_cnfg) = PC.parms.mode_doublets_dir/
 sparse_modes_file(n_cnfg) = PC.parms.sparse_modes_dir/
     "sparse_modes_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
 
-function write_correlator(n_cnfg, t₀)
+function write_correlator(n_cnfg, t₀, mom_chunk_idx, mode="w")
+    if mode ∉ ["r+", "w"]
+        throw(ArgumentError("Invalid mode: $mode, must be 'r+' or 'w'"))
+    end
+
     file_path = PC.parms.result_dir/"correlators_dad-DD_local-nonlocal_mixed_" *
         "$(PC.parms_toml["Run name"]["name"])_$(PC.parms.N_modes)modes_" *
         "n$(n_cnfg)_tsrc$(t₀).hdf5"
-    file = HDF5.h5open(string(file_path), "w")
+    file = HDF5.h5open(string(file_path), mode)
 
-    # Loop over all momentum index pairs for the nonlocal operator
-    for (iₚ_nonlocal, Iₚ_nonlocal) in enumerate(Iₚ_nonlocal_arr)
+    # Loop over all momentum index pairs for the nonlocal operator in current chunk
+    for (iₚ_nonlocal, Iₚ_nonlocal) in enumerate(Iₚ_nonlocal_chunk_arr[mom_chunk_idx])
         # Get momenta
         p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
         Ptot = p₁ + p₂
@@ -133,36 +142,34 @@ function write_correlator(n_cnfg, t₀)
         # Write correlators with dimension labels
         if direction == "full"
             # Remove forward/backward dimension
-            @views begin 
-                file[group_nloc_loc] = 
-                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[:, 1, :, :, :, :, 1, iₚ_nonlocal]
-                file[group_loc_nloc] = 
-                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[:, 1, :, :, :, :, 1, iₚ_nonlocal]
-            end
+            file[group_nloc_loc] =
+                C_nonlocal_local_tdnmn̄m̄iₚIₚ[:, 1, :, :, :, :, 1, iₚ_nonlocal]
+            file[group_loc_nloc] =
+                C_local_nonlocal_tdnmn̄m̄iₚIₚ[:, 1, :, :, :, :, 1, iₚ_nonlocal]
         else
-            @views begin 
-                file[group_nloc_loc] = 
-                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[:, :, :, :, :, :, 1, iₚ_nonlocal]
-                file[group_loc_nloc] = 
-                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[:, :, :, :, :, :, 1, iₚ_nonlocal]
-            end
+            file[group_nloc_loc] = 
+                C_nonlocal_local_tdnmn̄m̄iₚIₚ[:, :, :, :, :, :, 1, iₚ_nonlocal]
+            file[group_loc_nloc] = 
+                C_local_nonlocal_tdnmn̄m̄iₚIₚ[:, :, :, :, :, :, 1, iₚ_nonlocal]
         end
         HDF5.attrs(file[group_nloc_loc])["DIMENSION_LABELS"] = labels_nonlocal_local
         HDF5.attrs(file[group_loc_nloc])["DIMENSION_LABELS"] = labels_local_nonlocal
     end
 
-    # Write correlator shape
-    file["Correlator shape"] = direction
+    if mode == "w"
+        # Write correlator shape
+        file["Correlator shape"] = direction
 
-    # Write spin structure
-    file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
-    file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
-    file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
-    file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
+        # Write spin structure
+        file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
+        file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
+        file["Spin Structure/Gamma_dad_1"] = Γ₁_dad_labels
+        file["Spin Structure/Gamma_dad_2"] = Γ₂_dad_labels
 
-    # Write parameter file and program information
-    file["parms.toml"] = PC.parms.parms_toml_string
-    file["Program Information"] = PC.parms_toml["Program Information"]
+        # Write parameter file and program information
+        file["parms.toml"] = PC.parms.parms_toml_string
+        file["Program Information"] = PC.parms_toml["Program Information"]
+    end
 
     close(file)
 
@@ -186,9 +193,9 @@ if my_cnfg_rank == 0
 
     # Correlators and its labels (order of labels reversed in Julia)
     correlator_nloc_loc_γ_mom_size = 
-        (Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, 1, length(Iₚ_nonlocal_arr))
+        (Nᵧ_DD, Nᵧ_DD, Nᵧ_1_dad, Nᵧ_2_dad, 1, mom_chunk_size)
     correlator_loc_nloc_γ_mom_size = 
-        (Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, 1, length(Iₚ_nonlocal_arr))
+        (Nᵧ_1_dad, Nᵧ_2_dad, Nᵧ_DD, Nᵧ_DD, 1, mom_chunk_size)
     if direction in ["forward", "backward"]
         correlator_nloc_loc_size = (nₜ, 1, correlator_nloc_loc_γ_mom_size...)
         correlator_loc_nloc_size = (nₜ, 1, correlator_loc_nloc_γ_mom_size...)
@@ -221,7 +228,7 @@ end
 # Computation
 #############
 
-function compute_contractions!(t₀)
+function compute_contractions!(t₀, mom_chunk_idx)
     @time "      DD-dad nonlocal-locals mixed contractons" begin
         if my_cnfg_rank == 0
             # Index for source time `t₀`
@@ -260,7 +267,7 @@ function compute_contractions!(t₀)
             C_nl_arr = []
             C_ln_arr = []
 
-            for Iₚ_nonlocal in Iₚ_nonlocal_arr
+            for Iₚ_nonlocal in Iₚ_nonlocal_chunk_arr[mom_chunk_idx]
                 p₁, p₂ = PC.parms.p_arr[Iₚ_nonlocal]
                 Ptot = p₁ + p₂
 
@@ -294,30 +301,37 @@ function compute_contractions!(t₀)
 
         # Store correlator entries
         if my_cnfg_rank == 0
+            # Number of Momentum pairs
+            Iₚ_len = length(Iₚ_nonlocal_chunk_arr[mom_chunk_idx])
+
             if direction == "forward/backward"
                 # Backward direction
                 for iₜ in 1:nₜ-1
-                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[iₜ, 2, :, :, :, :, :, :] = corr_arr[iₜ][1]
-                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[iₜ, 2, :, :, :, :, :, :] = corr_arr[iₜ][2]
+                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[iₜ, 2, :, :, :, :, :, 1:Iₚ_len] =
+                        corr_arr[iₜ][1]
+                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[iₜ, 2, :, :, :, :, :, 1:Iₚ_len] =
+                        corr_arr[iₜ][2]
                 end
 
                 # Source time
-                C_nonlocal_local_tdnmn̄m̄iₚIₚ[nₜ, 2, :, :, :, :, :, :] = corr_arr[nₜ][1]
-                C_local_nonlocal_tdnmn̄m̄iₚIₚ[nₜ, 2, :, :, :, :, :, :] = corr_arr[nₜ][2]
-                C_nonlocal_local_tdnmn̄m̄iₚIₚ[1, 1, :, :, :, :, :, :] = corr_arr[nₜ][1]
-                C_local_nonlocal_tdnmn̄m̄iₚIₚ[1, 1, :, :, :, :, :, :] = corr_arr[nₜ][2]
+                C_nonlocal_local_tdnmn̄m̄iₚIₚ[nₜ, 2, :, :, :, :, :, 1:Iₚ_len] =
+                    corr_arr[nₜ][1]
+                C_local_nonlocal_tdnmn̄m̄iₚIₚ[nₜ, 2, :, :, :, :, :, 1:Iₚ_len] =
+                    corr_arr[nₜ][2]
+                C_nonlocal_local_tdnmn̄m̄iₚIₚ[1, 1, :, :, :, :, :, 1:Iₚ_len] = corr_arr[nₜ][1]
+                C_local_nonlocal_tdnmn̄m̄iₚIₚ[1, 1, :, :, :, :, :, 1:Iₚ_len] = corr_arr[nₜ][2]
 
                 # Forward direction
                 for iₜ in 2:nₜ
-                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, :] =
+                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, 1:Iₚ_len] =
                         corr_arr[iₜ+nₜ-1][1]
-                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, :] = 
+                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, 1:Iₚ_len] = 
                         corr_arr[iₜ+nₜ-1][2]
                 end
             else
                 for (iₜ, corr_t) in enumerate(corr_arr)    
-                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, :] = corr_t[1]
-                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, :] = corr_t[2]
+                    C_nonlocal_local_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, 1:Iₚ_len] = corr_t[1]
+                    C_local_nonlocal_tdnmn̄m̄iₚIₚ[iₜ, 1, :, :, :, :, :, 1:Iₚ_len] = corr_t[2]
                 end
             end
         end
@@ -364,13 +378,23 @@ function main()
                 end
                 println()
 
-                compute_contractions!(t₀)
-                
-                # Write Correlator
-                if my_cnfg_rank == 0
-                    @time "    Write correlator" begin
-                        write_correlator(n_cnfg, t₀)
+                for mom_chunk_idx in eachindex(Iₚ_nonlocal_chunk_arr)
+                    println("    Momenta chunk: " *
+                            "$mom_chunk_idx of $(length(Iₚ_nonlocal_chunk_arr))")
+
+                    compute_contractions!(t₀, mom_chunk_idx)
+                    
+                    # Write Correlator
+                    if my_cnfg_rank == 0
+                        @time "      Write correlator" begin
+                            if mom_chunk_idx == 1
+                                write_correlator(n_cnfg, t₀, mom_chunk_idx, "w")
+                            else
+                                write_correlator(n_cnfg, t₀, mom_chunk_idx, "r+")
+                            end
+                        end
                     end
+                    println()
                 end
 
                 # Run garbage collector (fully)

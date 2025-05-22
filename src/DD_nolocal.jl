@@ -84,6 +84,13 @@ for (Ptot_sq, p_sq_sum_max) in zip(Ptot_sq_arr, p_sq_sum_max_arr)
     append!(Iₚ_arr, Iₚ_arr_)
 end
 
+# Divide up momenta into chunks
+mom_chunk_size = PC.parms_toml["Momenta"]["chunk_size"]
+if mom_chunk_size == "full"
+    global mom_chunk_size = length(Iₚ_arr)
+end
+Iₚ_chunk_arr = collect(Iterators.partition(Iₚ_arr, mom_chunk_size))
+
 
 # %%############
 # File Functions
@@ -99,14 +106,18 @@ perambulator_charm_file(n_cnfg, i_src) = PC.parms.perambulator_charm_dir/
 mode_doublets_file(n_cnfg) = PC.parms.mode_doublets_dir/
     "mode_doublets_$(PC.parms_toml["Run name"]["name"])n$(n_cnfg)"
 
-function write_correlator(n_cnfg, t₀)
+function write_correlator(n_cnfg, t₀, mom_chunk_idx, mode="w")
+    if mode ∉ ["r+", "w"]
+        throw(ArgumentError("Invalid mode: $mode, must be 'r+' or 'w'"))
+    end
+
     file_path = PC.parms.result_dir/"correlators_DD_nonlocal_" *
         "$(PC.parms_toml["Run name"]["name"])_$(PC.parms.N_modes)modes_" *
         "n$(n_cnfg)_tsrc$(t₀).hdf5"
-    file = HDF5.h5open(string(file_path), "w")
+    file = HDF5.h5open(string(file_path), mode)
 
-    # Loop over all momentum index combinations
-    for (i_p, Iₚ) in enumerate(Iₚ_arr)
+    # Loop over all momentum index combinations in current chunk
+    for (i_p, Iₚ) in enumerate(Iₚ_chunk_arr[mom_chunk_idx])
         # Get momenta
         p₁, p₂, p₃, p₄ = PC.parms.p_arr[Iₚ]
         @assert p₁ + p₂ == p₃ + p₄
@@ -122,14 +133,10 @@ function write_correlator(n_cnfg, t₀)
         # Write correlators with dimension labels
         if direction == "full"
             # Remove forward/backward dimension
-            @views begin
-                file[group_ūcd̄c_c̄uc̄d] = 
-                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[:, 1, :, :, :, :, i_p]
-                file[group_ūcd̄c_c̄dc̄u] = 
-                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[:, 1, :, :, :, :, i_p]
-            end
-            HDF5.attrs(file[group_ūcd̄c_c̄uc̄d])["DIMENSION_LABELS"] = labels
-            HDF5.attrs(file[group_ūcd̄c_c̄dc̄u])["DIMENSION_LABELS"] = labels
+            file[group_ūcd̄c_c̄uc̄d] = 
+                C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[:, 1, :, :, :, :, i_p]
+            file[group_ūcd̄c_c̄dc̄u] = 
+                C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[:, 1, :, :, :, :, i_p]
         else
             mom_dim = ndims(C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ)
             file[group_ūcd̄c_c̄uc̄d] = selectdim(C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ, mom_dim, i_p)
@@ -139,16 +146,18 @@ function write_correlator(n_cnfg, t₀)
         HDF5.attrs(file[group_ūcd̄c_c̄dc̄u])["DIMENSION_LABELS"] = labels
     end
 
-    # Write correlator shape
-    file["Correlator shape"] = direction
+    if mode == "w"
+        # Write correlator shape
+        file["Correlator shape"] = direction
 
-    # Write spin structure
-    file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
-    file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
+        # Write spin structure
+        file["Spin Structure/Gamma_DD_1"] = Γ_DD_labels
+        file["Spin Structure/Gamma_DD_2"] = Γ_DD_labels
 
-    # Write parameter file and program information
-    file["parms.toml"] = PC.parms.parms_toml_string
-    file["Program Information"] = PC.parms_toml["Program Information"]
+        # Write parameter file and program information
+        file["parms.toml"] = PC.parms.parms_toml_string
+        file["Program Information"] = PC.parms_toml["Program Information"]
+    end
 
     close(file)
 
@@ -171,11 +180,11 @@ if my_cnfg_rank == 0
 
     # Correlator and its labels (order of labels reversed in Julia)
     if direction in ["forward", "backward"]
-        correlator_size = (nₜ, 1, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(Iₚ_arr))
+        correlator_size = (nₜ, 1, Nᵧ, Nᵧ, Nᵧ, Nᵧ, mom_chunk_size)
     elseif direction == "forward/backward"
-        correlator_size = (nₜ, 2, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(Iₚ_arr))
+        correlator_size = (nₜ, 2, Nᵧ, Nᵧ, Nᵧ, Nᵧ, mom_chunk_size)
     elseif direction == "full"
-        correlator_size = (PC.parms.Nₜ, 1, Nᵧ, Nᵧ, Nᵧ, Nᵧ, length(Iₚ_arr))
+        correlator_size = (PC.parms.Nₜ, 1, Nᵧ, Nᵧ, Nᵧ, Nᵧ, mom_chunk_size)
     else
         throw(ArgumentError("Invalid direction: $direction"))
     end
@@ -193,7 +202,7 @@ end
 # Computation
 #############
 
-function compute_contractions!(t₀)
+function compute_contractions!(t₀, mom_chunk_idx)
     @time "      DD nolocal contractons" begin
         if my_cnfg_rank == 0
             # Index for source time `t₀`
@@ -225,8 +234,8 @@ function compute_contractions!(t₀)
             C1_arr = []
             C2_arr = []
 
-            # Loop over all momentum index combinations
-            for Iₚ in Iₚ_arr
+            # Loop over all momentum index combinations in current chunk
+            for Iₚ in Iₚ_chunk_arr[mom_chunk_idx]
                 C1 = PC.DD_nonlocal_contractons(τ_charm, τ, Φ_t, Φ_t₀, Γ_arr, Iₚ)
                 C2 = PC.DD_nonlocal_contractons(τ_charm, τ, Φ_t, Φ_t₀, Γ_arr, Iₚ,
                                                 swap_ud=true)
@@ -251,28 +260,31 @@ function compute_contractions!(t₀)
 
         # Store correlator entries
         if my_cnfg_rank == 0
+            # Number of Momentum combinations
+            Iₚ_len = length(Iₚ_chunk_arr[mom_chunk_idx])
+
             if direction == "forward/backward"
                 # Backward direction
                 for iₜ in 1:nₜ-1
-                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[iₜ, 2, :, :, :, :, :] = corr_arr[iₜ][1]
-                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[iₜ, 2, :, :, :, :, :] = corr_arr[iₜ][2]
+                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[iₜ, 2, :, :, :, :, 1:Iₚ_len] = corr_arr[iₜ][1]
+                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[iₜ, 2, :, :, :, :, 1:Iₚ_len] = corr_arr[iₜ][2]
                 end
 
                 # Source time
-                C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[nₜ, 2, :, :, :, :, :] = corr_arr[nₜ][1]
-                C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[nₜ, 2, :, :, :, :, :] = corr_arr[nₜ][2]
-                C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[1, 1, :, :, :, :, :] = corr_arr[nₜ][1]
-                C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[1, 1, :, :, :, :, :] = corr_arr[nₜ][2]
+                C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[nₜ, 2, :, :, :, :, 1:Iₚ_len] = corr_arr[nₜ][1]
+                C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[nₜ, 2, :, :, :, :, 1:Iₚ_len] = corr_arr[nₜ][2]
+                C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[1, 1, :, :, :, :, 1:Iₚ_len] = corr_arr[nₜ][1]
+                C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[1, 1, :, :, :, :, 1:Iₚ_len] = corr_arr[nₜ][2]
 
                 # Forward direction
                 for iₜ in 2:nₜ
-                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, :] = corr_arr[iₜ+nₜ-1][1]
-                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, :] = corr_arr[iₜ+nₜ-1][2]
+                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, 1:Iₚ_len] = corr_arr[iₜ+nₜ-1][1]
+                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, 1:Iₚ_len] = corr_arr[iₜ+nₜ-1][2]
                 end
             else
                 for (iₜ, corr_t) in enumerate(corr_arr)    
-                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, :] = corr_t[1]
-                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, :] = corr_t[2]
+                    C_ūcd̄c_c̄uc̄d_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, 1:Iₚ_len] = corr_t[1]
+                    C_ūcd̄c_c̄dc̄u_tdnmn̄m̄Iₚ[iₜ, 1, :, :, :, :, 1:Iₚ_len] = corr_t[2]
                 end
             end
         end
@@ -315,13 +327,22 @@ function main()
                 end
                 println()
 
-                compute_contractions!(t₀)
-                
-                # Write Correlator
-                if my_cnfg_rank == 0
-                    @time "    Write correlator" begin
-                        write_correlator(n_cnfg, t₀)
+                for mom_chunk_idx in eachindex(Iₚ_chunk_arr)
+                    println("    Momenta chunk: $mom_chunk_idx of $(length(Iₚ_chunk_arr))")
+
+                    compute_contractions!(t₀, mom_chunk_idx)
+                    
+                    # Write Correlator
+                    if my_cnfg_rank == 0
+                        @time "      Write correlator" begin
+                            if mom_chunk_idx == 1
+                                write_correlator(n_cnfg, t₀, mom_chunk_idx, "w")
+                            else
+                                write_correlator(n_cnfg, t₀, mom_chunk_idx, "r+")
+                            end
+                        end
                     end
+                    println()
                 end
 
                 # Run garbage collector (fully)
