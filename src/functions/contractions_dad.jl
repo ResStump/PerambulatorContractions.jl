@@ -1,4 +1,4 @@
-@doc raw"""
+#= @doc raw"""
     dad_local_contractons!(C_tnmiₚ::AbstractArray, τ_charm_αkβlt::AbstractArray, τ_light_αkβlt::AbstractArray, sparse_modes_arrays::NTuple{4, AbstractArray}, Γ₁_arr::AbstractVector{<:AbstractMatrix}, Γ₂_arr::AbstractVector{<:AbstractMatrix}, t₀::Integer, p_arr::AbstractVector{<:AbstractVector})
 
 Contract the charm perambulator `τ_charm_αkβlt` and the light perambulator `τ_light_αkβlt`
@@ -197,10 +197,10 @@ function dad_local_contractons!(
     C_tnmiₚ .*= (prod(parms.Nₖ)/N_points)^2
 
     return
-end
+end =#
 
 @doc raw"""
-    dad_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_arr::AbstractVector{<:AbstractMatrix}, Γ₂_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> C_nmiₚ::AbstractArray
+    dad_local_contractons(τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray, sparse_modes_arrays_tt₀::NTuple{4, AbstractArray}, Γ₁_arr::AbstractVector{<:AbstractMatrix}, Γ₂_arr::AbstractVector{<:AbstractMatrix}, p_arr::AbstractVector{<:AbstractVector}) -> C_nmn̄m̄iₚ::AbstractArray
 
 Contract the charm perambulator `τ_charm_αkβl_t` and the light perambulator `τ_light_αkβl_t`
 and the sparse Laplace modes in `sparse_modes_arrays_tt₀` to get the local
@@ -212,12 +212,12 @@ combinations of them. This gives a vacuum expectation value of the form \
 <(c\_b^T CΓ₁ c\_c  ̄u\_d CΓ₂ d̄\_e^T)(x')
 (c̄\_b' C ΓbarC₁ c̄\_c'^T  d\_d'^T C ΓbarC₂ u\_e')(x)>` \
 (in position space) where `ΓbarCᵢ = Cγ₄ Γᵢ^† γ₄C`. This is computed for all combinations of
-the gamma matrices in `Γ₁_arr` and `Γ₂_arr`. The result is retuned as the array `C_nmiₚ`
+the gamma matrices in `Γ₁_arr` and `Γ₂_arr`. The result is retuned as the array `C_nmn̄m̄iₚ`
 where the indices n, m, correspond to the indices of the Γ's in the expectation value
 in the given order.
 
 The array `p_arr` contains the integer momenta the correlator is projected to
-(index iₚ in the returned array `C_nmiₚ`).
+(index iₚ in the returned array `C_nmn̄m̄iₚ`).
 """
 function dad_local_contractons(
     τ_charm_αkβl_t::AbstractArray, τ_light_αkβl_t::AbstractArray,
@@ -252,7 +252,7 @@ function dad_local_contractons(
     p_μiₚ = stack(p_arr)
 
     # Allocate correlator
-    C_nmiₚ = zeros(ComplexF64, Nᵧ_1, Nᵧ_2, length(p_arr))
+    C_nmn̄m̄iₚ = zeros(ComplexF64, Nᵧ_1, Nᵧ_2, Nᵧ_1, Nᵧ_2, length(p_arr))
 
     # Conjugate perambulator and multiply γ₅ to use γ₅-hermiticity
     TO.@tensoropt (l, k) begin
@@ -310,56 +310,38 @@ function dad_local_contractons(
             @assert D⁻¹_light_αaβb_iₓiₓ′ ≈ D⁻¹_light_αaβb_iₓiₓ′_ =#
 
             # Light part
-            C_light_dd′ee′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_2)
-            for m in 1:Nᵧ_2
-                C_light_dd′ee′_m = @view C_light_dd′ee′n[:, :, :, :, m]
-                CΓ₂_αβ_m = @view CΓ₂_αβn[:, :, m]
-                CΓbarC₂_αβ_m = @view CΓbarC₂_αβn[:, :, m]
-                TO.@tensoropt begin
-                    C_light_dd′ee′_m[d, d', e, e'] =
-                        CΓ₂_αβ_m[δ, ϵ] * D⁻¹_light_αaβb_iₓiₓ′[δ', d', ϵ, e] *
-                        CΓbarC₂_αβ_m[δ', ϵ'] * D⁻¹_light_αaβb_iₓiₓ′[ϵ', e', δ, d]
-                end
+            TO.@tensoropt begin
+                C_light_dd′ee′mm̄[d, d', e, e', m, m̄] :=
+                    CΓ₂_αβn[δ, ϵ, m] * D⁻¹_light_αaβb_iₓiₓ′[δ', d', ϵ, e] *
+                    CΓbarC₂_αβn[δ', ϵ', m̄] * D⁻¹_light_αaβb_iₓiₓ′[ϵ', e', δ, d]
             end
 
             # Positive charm part
-            C_pos_charm_bb′cc′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_1)
-            for n in 1:Nᵧ_1
-                C_pos_charm_bb′cc′_n = @view C_pos_charm_bb′cc′n[:, :, :, :, n]
-                CΓ₁_αβ_n = @view CΓ₁_αβn[:, :, n]
-                CΓbarC₁_αβ_n = @view CΓbarC₁_αβn[:, :, n]
-                TO.@tensoropt begin
-                    C_pos_charm_bb′cc′_n[b, b', c, c'] =
-                        CΓ₁_αβ_n[β, γ] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, β', b'] *
-                        CΓbarC₁_αβ_n[β', γ'] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, γ', c']
-                end
+            TO.@tensoropt begin
+                C_pos_charm_bb′cc′nn̄[b, b', c, c', n, n̄] :=
+                    CΓ₁_αβn[β, γ, n] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, β', b'] *
+                    CΓbarC₁_αβn[β', γ', n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, γ', c']
             end
 
             # Negative charm part
-            C_neg_charm_bb′cc′n = Array{ComplexF64}(undef, N_c, N_c, N_c, N_c, Nᵧ_1)
-            for n in 1:Nᵧ_1
-                C_neg_charm_bb′cc′_n = @view C_neg_charm_bb′cc′n[:, :, :, :, n]
-                CΓ₁_αβ_n = @view CΓ₁_αβn[:, :, n]
-                CΓbarC₁_αβ_n = @view CΓbarC₁_αβn[:, :, n]
-                TO.@tensoropt begin
-                    C_neg_charm_bb′cc′_n[b, b', c, c'] =
-                        CΓ₁_αβ_n[β, γ] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, γ', c'] *
-                        CΓbarC₁_αβ_n[β', γ'] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, β', b']
-                end
+            TO.@tensoropt begin
+                C_neg_charm_bb′cc′nn̄[b, b', c, c', n, n̄] :=
+                    CΓ₁_αβn[β, γ, n] * D⁻¹_charm_αaβb_iₓ′iₓ[γ, c, γ', c'] *
+                    CΓbarC₁_αβn[β', γ', n̄] * D⁻¹_charm_αaβb_iₓ′iₓ[β, b, β', b']
             end
 
             # Combine light and charm parts (sum over epsilon tensors)
             TO.@tensoropt begin
-                C_nm[n, m] :=
+                C_nmn̄m̄[n, m, n̄, m̄] :=
                     (
-                        C_light_dd′ee′n[b, b', c, c', m] +
-                        C_light_dd′ee′n[c, c', b, b', m] -
-                        C_light_dd′ee′n[b, c', c, b', m] -
-                        C_light_dd′ee′n[c, b', b, c', m]
+                        C_light_dd′ee′mm̄[b, b', c, c', m, m̄] +
+                        C_light_dd′ee′mm̄[c, c', b, b', m, m̄] -
+                        C_light_dd′ee′mm̄[b, c', c, b', m, m̄] -
+                        C_light_dd′ee′mm̄[c, b', b, c', m, m̄]
                     ) *
                     (
-                        C_pos_charm_bb′cc′n[b, b', c, c', n] -
-                        C_neg_charm_bb′cc′n[b, b', c, c', n]
+                        C_pos_charm_bb′cc′nn̄[b, b', c, c', n, n̄] -
+                        C_neg_charm_bb′cc′nn̄[b, b', c, c', n, n̄]
                     )
             end
 
@@ -368,16 +350,16 @@ function dad_local_contractons(
                 (x_sink_μiₓ_t[:, iₓ′] - x_src_μiₓ_t₀[:, iₓ])./parms.Nₖ
             exp_mipΔx_arr = exp.(p_μiₚ' * m2πiΔx)
             for (iₚ, exp_mipΔx) in enumerate(exp_mipΔx_arr)
-                C_nm_iₚ = @view C_nmiₚ[:, :, iₚ]
+                C_nmn̄m̄_iₚ = @view C_nmn̄m̄iₚ[:, :, :, :, iₚ]
                 TO.@tensoropt begin
-                    C_nm_iₚ[n, m] += exp_mipΔx * C_nm[n, m]
+                    C_nmn̄m̄_iₚ[n, m, n̄, m̄] += exp_mipΔx * C_nmn̄m̄[n, m, n̄, m̄]
                 end
             end
         end
     end
 
     # Normalization
-    C_nmiₚ .*= (prod(parms.Nₖ)/N_points)^2
+    C_nmn̄m̄iₚ .*= (prod(parms.Nₖ)/N_points)^2
 
-    return C_nmiₚ
+    return C_nmn̄m̄iₚ
 end

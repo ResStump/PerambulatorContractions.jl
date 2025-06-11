@@ -102,9 +102,9 @@ function write_correlator(n_cnfg, t₀)
 
         if direction == "full"
             # Remove forward/backward dimension
-            file["Correlators/$p_str"] = @view C_tdnmiₚ[:, 1, :, :, iₚ]
+            file["Correlators/$p_str"] = C_tdnmn̄m̄iₚ[:, 1, :, :, :, :, iₚ]
         else
-            file["Correlators/$p_str"] = @view C_tdnmiₚ[:, :, :, :, iₚ]
+            file["Correlators/$p_str"] = C_tdnmn̄m̄iₚ[:, :, :, :, :, :, iₚ]
         end
         HDF5.attrs(file["Correlators/$p_str"])["DIMENSION_LABELS"] = labels
     end
@@ -141,19 +141,19 @@ if my_cnfg_rank == 0
 
     # Correlator and its labels (order of labels reversed in Julia)
     if direction in ["forward", "backward"]
-        correlator_size = (nₜ, 1, Nᵧ_1, Nᵧ_2, length(p_arr))
+        correlator_size = (nₜ, 1, Nᵧ_1, Nᵧ_2, Nᵧ_1, Nᵧ_2, length(p_arr))
     elseif direction == "forward/backward"
-        correlator_size = (nₜ, 2, Nᵧ_1, Nᵧ_2, length(p_arr))
+        correlator_size = (nₜ, 2, Nᵧ_1, Nᵧ_2, Nᵧ_1, Nᵧ_2, length(p_arr))
     elseif direction == "full"
-        correlator_size = (PC.parms.Nₜ, 1, Nᵧ_1, Nᵧ_2, length(p_arr))
+        correlator_size = (PC.parms.Nₜ, 1, Nᵧ_1, Nᵧ_2, Nᵧ_1, Nᵧ_2, length(p_arr))
     else
         throw(ArgumentError("Invalid direction: $direction"))
     end
-    C_tdnmiₚ = Array{ComplexF64}(undef, correlator_size)
+    C_tdnmn̄m̄iₚ = Array{ComplexF64}(undef, correlator_size)
     if direction == "full"
-        labels = ["Gamma2", "Gamma1", "t"]
+        labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "t"]
     else
-        labels = ["Gamma2", "Gamma1", "fwd/bwd", "t"]
+        labels = ["Gamma2 bar", "Gamma1 bar", "Gamma2", "Gamma1", "fwd/bwd", "t"]
     end
 end
 
@@ -221,20 +221,20 @@ function compute_contractions!(t₀)
             if direction == "forward/backward"
                 # Backward direction
                 for iₜ in 1:nₜ-1
-                    C_tdnmiₚ[iₜ, 2, :, :, :] = corr[iₜ]
+                    C_tdnmn̄m̄iₚ[iₜ, 2, :, :, :, :, :] = corr[iₜ]
                 end
 
                 # Source time
-                C_tdnmiₚ[nₜ, 2, :, :, :] = corr[nₜ]
-                C_tdnmiₚ[1, 1, :, :, :] = corr[nₜ]
+                C_tdnmn̄m̄iₚ[nₜ, 2, :, :, :, :, :] = corr[nₜ]
+                C_tdnmn̄m̄iₚ[1, 1, :, :, :, :, :] = corr[nₜ]
 
                 # Forward direction
                 for iₜ in 2:nₜ
-                    C_tdnmiₚ[iₜ, 1, :, :, :] = corr[iₜ+nₜ-1]
+                    C_tdnmn̄m̄iₚ[iₜ, 1, :, :, :, :, :] = corr[iₜ+nₜ-1]
                 end
             else
                 for (iₜ, corr_t) in enumerate(corr)    
-                    C_tdnmiₚ[iₜ, 1, :, :, :] = corr_t
+                    C_tdnmn̄m̄iₚ[iₜ, 1, :, :, :, :, :] = corr_t
                 end
             end
         end
