@@ -431,6 +431,8 @@ function main()
 
                 compute_contractions!(i_src, t₀, i_cnfg)
 
+                # Run garbage collector for "young" objects
+                GC.gc(false)
                 println()
             end
 
@@ -444,8 +446,6 @@ function main()
                 end
             end
                 
-            # Run garbage collector for "young" objects
-            GC.gc(false)
             println()
         end
 
