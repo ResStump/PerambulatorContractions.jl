@@ -47,7 +47,7 @@ my_cnfg_rank = MPI.Comm_rank(cnfg_comm)
 # Array of (monomial of) γ-matrices and their labels
 Γ_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
 Nᵧ = length(Γ_arr)
-Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "-i1"]
+Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "i1"]
 
 # Continuation run?
 finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(comm_number).txt"

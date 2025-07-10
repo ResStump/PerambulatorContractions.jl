@@ -55,7 +55,7 @@ end
 # for the DD operators
 Γ_DD_arr = [PC.γ[5], PC.γ[1], PC.γ[2], PC.γ[3], im*PC.γ[1]^0]
 Nᵧ_DD = length(Γ_DD_arr)
-Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "-i1"]
+Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "i1"]
 # and for the dad operators
 Γ₁_dad_arr = [PC.γ[1], PC.γ[2], PC.γ[3]]
 Γ₂_dad_arr = [PC.γ[5]]
