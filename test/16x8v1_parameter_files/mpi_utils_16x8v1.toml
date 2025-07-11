@@ -12,6 +12,7 @@ result_dir = ""
 ["Geometry"]
 N_t     = 16
 N_k     = [8, 8, 8]
+N_modes = "from perambulator"
 
 ["Configurations"]
 first   = 1
