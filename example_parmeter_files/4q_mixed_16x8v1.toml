@@ -12,6 +12,7 @@ result_dir = "results"
 ["Geometry"]
 N_t     = 16
 N_k     = [8, 8, 8]
+N_modes = "from perambulator" # "from perambulator" or Integer
 
 ["Correlator shape"]
 direction       = "full"    # "forward", "backward", "forward/backward" or "full"
@@ -24,11 +25,11 @@ step    = 1
 
 ["Sources"]
 N_src           = 2
-src_separation  = 8
+src_separation  = 8     # Integer or "file" if all src specified in tsrc_list
 
 ["Perambulator"]
 label_light      = "perambulator_light_tsrc"
-label_charm      = "perambulator_light_tsrc"
+label_charm      = "perambulator_charm_tsrc"
 
 ["Momenta nonlocal"]
 Ptot_sq      = [0]
