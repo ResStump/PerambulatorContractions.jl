@@ -101,32 +101,52 @@ function read_parameters()
     N_cnfg = (last_cnfg - first_cnfg) ÷ step_cnfg + 1
     cnfg_numbers = Array(first_cnfg:step_cnfg:last_cnfg)
 
-    # Find first source times for specified configurations
-    tsrc_first = Array{Int, 1}(undef, N_cnfg)
-    for (i_cnfg, n_cnfg) in enumerate(cnfg_numbers)
-        idx = findfirst(n -> n == n_cnfg, tsrc_list[:, 1])
-        tsrc_first[i_cnfg] = tsrc_list[idx, 2]
-    end
-
-    # Store all source times in `tsrc_arr`
+    # Generate `tsrc_arr` containing the sources for all configs
     N_src = parms_toml["Sources"]["N_src"]
     src_separation = parms_toml["Sources"]["src_separation"]
-    tsrc_arr = hcat([tsrc_first .+ i_src*src_separation
-                     for i_src in 0:N_src-1]...)
-    tsrc_arr = mod.(tsrc_arr, Nₜ) # periodically shift values >= Nₜ
+    if src_separation == "file"
+        # Get all sourecs form file (for specified configurations)
+        tsrc_arr = Array{Int, 2}(undef, length(cnfg_numbers), N_src)
+        for (i_cnfg, n_cnfg) in enumerate(cnfg_numbers)
+            idx = findfirst(==(n_cnfg), tsrc_list[:, 1])
+            tsrc_arr[i_cnfg, :] = tsrc_list[idx, 2:N_src+1]
+        end
+    elseif src_separation isa Integer && src_separation > 0
+        # Find first source times (for specified configurations)
+        tsrc_first = Vector{Int}(undef, N_cnfg)
+        for (i_cnfg, n_cnfg) in enumerate(cnfg_numbers)
+            idx = findfirst(==(n_cnfg), tsrc_list[:, 1])
+            tsrc_first[i_cnfg] = tsrc_list[idx, 2]
+        end
 
-    # Extract number of modes from one perambulator file
-    perambulator_file = 
-        "$(parms_toml["Perambulator"]["label_light"])" * "$(tsrc_list[1, 2])_" *
-        "$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
-    
-    file = HDF5.h5open(string(perambulator_dir/perambulator_file), "r")
-    N_modes = size(file["perambulator"])[4]
-    close(file)
+        # Store all source times in `tsrc_arr`
+        tsrc_arr = hcat([tsrc_first .+ i_src*src_separation
+                        for i_src in 0:N_src-1]...)
+        tsrc_arr = mod.(tsrc_arr, Nₜ) # periodically shift values >= Nₜ
+    else
+        throw(ArgumentError("src_separation must be a positive integer or 'file'."))
+    end
+
+    # Set number of Laplace modes `N_modes`
+    N_modes_parm = parms_toml["Geometry"]["N_modes"]
+    if N_modes_parm == "from perambulator"
+        # Extract number of modes from one perambulator file
+        perambulator_file = 
+            "$(parms_toml["Perambulator"]["label_light"])" * "$(tsrc_arr[1, 1])_" *
+            "$(parms_toml["Run name"]["name"])n$(first_cnfg)"
+        
+        file = HDF5.h5open(string(perambulator_dir/perambulator_file), "r")
+        N_modes = size(file["perambulator"])[4]
+        close(file)
+    elseif N_modes_parm isa Integer && N_modes_parm > 0
+        N_modes = N_modes_parm
+    else
+        throw(ArgumentError("N_modes must be a positive integer or 'from perambulator'."))
+    end
 
     # Path to a mode doublets file
     mode_doublets_file = mode_doublets_dir/
-        "mode_doublets_$(parms_toml["Run name"]["name"])n$(tsrc_list[1, 1])"
+        "mode_doublets_$(parms_toml["Run name"]["name"])n$(first_cnfg)"
 
     # Momenta and the corresponding indices
     p_arr = read_mode_doublet_momenta(mode_doublets_file)
@@ -145,6 +165,8 @@ end
     read_perambulator!(perambulator_file, τ_αkβlt)
 
 Read the perambulator from the HDF5 file `perambulator_file` and store it in `τ_αkβlt`.
+
+The data is only read for the first parms.N_modes modes, the rest is ignored.
 
 ### Indices
 The indices of `τ_αkβlt` are:
@@ -171,7 +193,7 @@ function read_perambulator!(perambulator_file, τ_αkβlt)
     
     # Read perambulator and set noise index to 1 (since noise is `ones`)
     file = HDF5.h5open(string(perambulator_file), "r")
-    τ_αkβlt[:] = file["perambulator"][:,:,:,:,:,1]
+    τ_αkβlt .= file["perambulator"][:, 1:parms.N_modes, :, 1:parms.N_modes, :, 1]
     close(file)
 
     return 
@@ -181,6 +203,8 @@ end
     read_perambulator(perambulator_file) -> τ_αkβlt
 
 Read the perambulator from the HDF5 file `perambulator_file`.
+
+The data is only read for the first parms.N_modes modes, the rest is ignored.
 
 ### Indices
 The indices of `τ_αkβlt` are:
@@ -223,6 +247,8 @@ end
 Read the mode\_doublets HDF5 file `mode_doublets_file` and store the mode doublets in
 `Φ_kltiₚ`. These mode doublets contain no derivatives.
 
+The data is only read for the first parms.N_modes modes, the rest is ignored.
+
 ### Indices
 The indices of `Φ_kltiₚ` are:
 - k:  conjugated Laplace mode
@@ -244,7 +270,7 @@ function read_mode_doublets!(mode_doublets_file, Φ_kltiₚ)
 
     # Read mode doublets and set the derivative index to 1 (no derivative)
     file = HDF5.h5open(string(mode_doublets_file), "r")
-    Φ_tmp_kltiₚ = file["mode_doublets"][1,:,:,:,:]
+    Φ_tmp_kltiₚ = file["mode_doublets"][1, 1:parms.N_modes, 1:parms.N_modes, :, :]
     close(file)
 
     # Permute dimensions to match index convention of perambulator
@@ -258,6 +284,8 @@ end
 
 Read the mode\_doublets HDF5 file `mode_doublets_file` and return the mode doublets
 `Φ_kltiₚ`. These mode doublets contain no derivatives.
+
+The data is only read for the first parms.N_modes modes, the rest is ignored.
 
 ### Indices
 The indices of `Φ_kltiₚ` are:
@@ -283,6 +311,8 @@ Read the sparse\_modes HDF5 file `sparse_modes_file` and store the sparse space 
 at the sink `x_sink_μiₓt` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
 of Laplacian) for the sink `v_sink_μiₓkt` and the source `v_src_μiₓkt` in
 `sparse_modes_arrays` = `(x_sink_μiₓt, x_src_μiₓt, v_sink_ciₓkt, v_src_ciₓkt)`.
+
+Only the first `parms.N_modes` modes are read, the rest is ignored.
 
 ### Indices
 The last characters in the variable names describe which indices these arrays carry. The
@@ -321,10 +351,10 @@ function read_sparse_modes!(sparse_modes_file, sparse_modes_arrays)
     end
 
     file = HDF5.h5open(string(sparse_modes_file), "r")
-    x_sink_μiₓt[:] = read(file["sparse_space_sink"])
-    x_src_μiₓt[:] = read(file["sparse_space_src"])
-    v_sink_ciₓkt[:] = read(file["sparse_modes_sink"])
-    v_src_ciₓkt[:] = read(file["sparse_modes_src"])
+    x_sink_μiₓt .= read(file["sparse_space_sink"])
+    x_src_μiₓt .= read(file["sparse_space_src"])
+    v_sink_ciₓkt .= file["sparse_modes_sink"][:, :, 1:parms.N_modes, :]
+    v_src_ciₓkt .= file["sparse_modes_src"][:, :, 1:parms.N_modes, :]
     close(file)
 
     return
@@ -337,6 +367,8 @@ end
 Read the sparse\_modes HDF5 file `sparse_modes_file` and return the sparse space positions
 at the sink `x_sink_μiₓt` and the source `x_src_μiₓt`, and the sparse modes (eigenvectors
 of Laplacian) for the sink `v_sink_μiₓkt` and the source `v_src_μiₓkt`.
+
+Only the first `parms.N_modes` modes are read, the rest is ignored.
 
 ### Indices
 The last characters in the variable names describe which indices these arrays carry. The
