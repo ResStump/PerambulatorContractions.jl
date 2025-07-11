@@ -33,12 +33,12 @@ function increase_separation!(sparse_modes_arrays_new, sparse_modes_arrays, N_se
         sparse_modes_arrays_new
 
     # Fill new sparse spaces/modes at sink
-    x_sink_new_μiₓt[:] = x_sink_μiₓt[:, iₓ_new_arr, :]
-    v_sink_new_ciₓkt[:] = v_sink_ciₓkt[:, iₓ_new_arr, :, :]
+    x_sink_new_μiₓt .= x_sink_μiₓt[:, iₓ_new_arr, :]
+    v_sink_new_ciₓkt .= v_sink_ciₓkt[:, iₓ_new_arr, :, :]
 
     # Fill new sparse spaces/modes at src
-    x_src_new_μiₓt[:] = x_src_μiₓt[:, iₓ_new_arr, :]
-    v_src_new_ciₓkt[:] = v_src_ciₓkt[:, iₓ_new_arr, :, :]
+    x_src_new_μiₓt .= x_src_μiₓt[:, iₓ_new_arr, :]
+    v_src_new_ciₓkt .= v_src_ciₓkt[:, iₓ_new_arr, :, :]
 
     return
 end

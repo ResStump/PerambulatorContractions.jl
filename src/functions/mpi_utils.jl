@@ -219,7 +219,7 @@ function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.
                 if length(vectors[idx]) == 1
                     vectors_loc[idx][1] = vectors[idx][1]
                 else
-                    vectors_loc[idx][:] = vectors[idx][first:last]
+                    vectors_loc[idx] .= vectors[idx][first:last]
                 end
             end
         end
