@@ -9,6 +9,10 @@ MPI.Init()
 myrank = MPI.Comm_rank(MPI.COMM_WORLD)
 N_ranks = MPI.Comm_size(MPI.COMM_WORLD)
 
+if myrank != 0
+    redirect_stdout(devnull)
+end
+
 # Add infile manually to arguments
 pushfirst!(ARGS, "-i", "16x8v1_parameter_files/mpi_utils_16x8v1.toml")
 
@@ -69,4 +73,25 @@ if myrank == 1
     @test result == f.(arr1, arr2, arr3)
 else
     PC.mpi_broadcast(f, root=1)
+end
+
+# Test mpi_broadcast when some ranks have no work to do
+arr1 = [rand(10, 10) for _ in 1:1]
+arr2 = [rand(15, 15) for _ in 1:1]
+arr3 = [rand(10, 10)]
+if myrank == 0
+    result = PC.mpi_broadcast(f, arr1, arr2, arr3)
+    @test result == f.(arr1, arr2, arr3)
+else
+    PC.mpi_broadcast(f)
+end
+# Same test but when some arrays have length > 1
+arr1 = [rand(10, 10) for _ in 1:2]
+arr2 = [rand(15, 15) for _ in 1:2]
+arr3 = [rand(10, 10)]
+if myrank == 0
+    result = PC.mpi_broadcast(f, arr1, arr2, arr3)
+    @test result == f.(arr1, arr2, arr3)
+else
+    PC.mpi_broadcast(f)
 end
