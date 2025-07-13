@@ -101,7 +101,8 @@ Broadcast the function `f` over the vectors of arrays `vectors` using MPI on the
 communicator `comm`. The arrays in `vectors` are distributed among the available ranks which
 process a subset of them. Then, the result is gathered on rank `root` and returned. 
 This function has the same behavior as f.(vectors...) regarding the lengths of the
-`vectors`.
+`vectors`. If `f` is a mutating function, only the vectors processed on the root rank are
+modified.
 
 # Usage
 On rank `root`, call `mpi_broadcast(f, vectors...)` and on the remaining ranks, call
@@ -109,12 +110,13 @@ On rank `root`, call `mpi_broadcast(f, vectors...)` and on the remaining ranks, 
 
 # Performance tips
 To acheive good performance, `length(vectors)` should be divisible by
-`MPI.Comm_size(comm)`. \
+`MPI.Comm_size(comm)`. Set `verbose=true` (default) to be warned if the work cannot not be
+distributed well among the ranks. \
 The output of `f` can be of arbitrary type, therefore the gather communication is done
 using serialization which might be slow for large arrays.
 """
 function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.COMM_WORLD,
-                       root::Int=0, log_prefix="mpi_broadcast: ")
+                       root::Int=0, log_prefix="mpi_broadcast: ", verbose=true)
     myrank = MPI.Comm_rank(comm)
     N_ranks = MPI.Comm_size(comm)
     nonroot_ranks = deleteat!(collect(0:N_ranks-1), root+1)
@@ -170,12 +172,25 @@ function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.
         N_elem_per_rank_max = ceil(Int, N_elem/N_ranks)
         first = myrank*N_elem_per_rank_max + 1
         last = min((myrank+1)*N_elem_per_rank_max, N_elem)
-        N_elem_loc = last - first + 1
+        N_elem_loc = max(last - first + 1, 0)
         v_lengths_loc = min.(v_lengths, N_elem_loc) # Length of the local vectors
 
-        # Allocate memory for local vectors
+        # Check on root if all ranks have (the same amount of) work to do
+        if verbose && myrank == root
+            first_lastrank = (N_ranks-1)*N_elem_per_rank_max + 1
+            last_lastrank = min(N_ranks*N_elem_per_rank_max, N_elem)
+            N_elem_lastrank = max(last_lastrank - first_lastrank + 1, 0)
+            if N_elem_lastrank == 0
+                println("$(log_prefix)Warning: Some ranks have no work to do.")
+            elseif N_elem_loc != N_elem_lastrank
+                println("$(log_prefix)Warning: The work cannot be evenly distributed "*
+                        "among the ranks.")
+            end
+        end
+
+        # Allocate memory for local vectors (only on non-root ranks)
         vectors_loc = [Vector{Array{type}}(undef, v_len)
-                    for (type, v_len) in zip(types, v_lengths_loc)]
+                       for (type, v_len) in zip(types, v_lengths_loc)]
         if myrank != root
             for idx in eachindex(vectors_loc)
                 for i in eachindex(vectors_loc[idx])
@@ -202,7 +217,8 @@ function mpi_broadcast(f, vectors::AbstractVector{<:AbstractArray}...; comm=MPI.
                 first_r = rank*N_elem_per_rank_max + 1
                 last_r = min((rank+1)*N_elem_per_rank_max, N_elem)
                 for v in vectors
-                    if length(v) == 1
+                    # Only send if rank has work to do
+                    if length(v) == 1 && last_r >= first_r
                         sreq = MPI.Isend(v[1], comm; dest=rank, tag=rank)
                         push!(sreq_arr, sreq)
                     else
