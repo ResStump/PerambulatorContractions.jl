@@ -50,7 +50,8 @@ Nᵧ = length(Γ_arr)
 Γ_DD_labels = ["gamma_5", "gamma_1", "gamma_2", "gamma_3", "i1"]
 
 # Continuation run?
-finished_cnfgs_file = PC.parms.result_dir/"finished_cnfgs_$(comm_number).txt"
+finished_cnfgs_file = PC.parms.result_dir/
+    "finished_cnfgs_$(PC.parms_toml["Run name"]["name"])_$(comm_number).txt"
 continuation_run = PC.parms_toml["Various"]["continuation_run"]
 if continuation_run
     finished_cnfgs = vec(DF.readdlm(string(finished_cnfgs_file), '\n', Int))
